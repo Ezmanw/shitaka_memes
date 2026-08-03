@@ -51,8 +51,8 @@ jobs:
       - run: flutter build macos --release
       - name: Package .app
         run: |
-          cd build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent "Shitaka Memes.app" "${{ runner.temp }}/shitaka-memes-macos.zip"
+          APP_PATH=$(find build/macos/Build/Products/Release -name "*.app" -type d | head -1)
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${{ runner.temp }}/shitaka-memes-macos.zip"
       - name: Upload to release (tagged)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
