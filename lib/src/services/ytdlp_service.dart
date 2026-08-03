@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 import 'ffmpeg_service.dart';
 
@@ -30,12 +31,91 @@ class YtdlpService {
     return found;
   }
 
+  static bool isYoutubeUrl(String url) {
+    return RegExp(r'(youtube\.com|youtu\.be)', caseSensitive: false).hasMatch(url);
+  }
+
+  static Future<File> downloadNativeStream(
+    String url,
+    Directory targetDir, {
+    void Function(String line)? onProgress,
+  }) async {
+    final cleanUrl = url.trim();
+    if (isYoutubeUrl(cleanUrl)) {
+      final yt = YoutubeExplode();
+      try {
+        onProgress?.call('Fetching YouTube video info...');
+        final video = await yt.videos.get(cleanUrl);
+        final manifest = await yt.videos.streamsClient.getManifest(video.id);
+        final streamInfo = manifest.muxed.withHighestBitrate();
+
+        final safeTitle = video.title.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+        final time = DateTime.now().millisecondsSinceEpoch;
+        final ext = streamInfo.container.name;
+        final file = File('${targetDir.path}${Platform.pathSeparator}${safeTitle}_$time.$ext');
+
+        onProgress?.call('Downloading stream (${streamInfo.videoQualityLabel})...');
+        final stream = yt.videos.streamsClient.get(streamInfo);
+        final sink = file.openWrite();
+
+        int downloaded = 0;
+        final total = streamInfo.size.totalBytes;
+
+        await for (final chunk in stream) {
+          downloaded += chunk.length;
+          sink.add(chunk);
+          if (total > 0) {
+            final pct = ((downloaded / total) * 100).round();
+            onProgress?.call('Downloading YouTube video ($pct%)…');
+          }
+        }
+
+        await sink.flush();
+        await sink.close();
+        return file;
+      } finally {
+        yt.close();
+      }
+    } else {
+      onProgress?.call('Downloading direct video stream...');
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse(cleanUrl));
+      final response = await request.close();
+
+      final time = DateTime.now().millisecondsSinceEpoch;
+      final ext = cleanUrl.contains('.webm') ? 'webm' : 'mp4';
+      final file = File('${targetDir.path}${Platform.pathSeparator}video_$time.$ext');
+
+      final sink = file.openWrite();
+      int downloaded = 0;
+      final total = response.contentLength;
+
+      await for (final chunk in response) {
+        downloaded += chunk.length;
+        sink.add(chunk);
+        if (total > 0) {
+          final pct = ((downloaded / total) * 100).round();
+          onProgress?.call('Downloading file ($pct%)…');
+        }
+      }
+
+      await sink.flush();
+      await sink.close();
+      return file;
+    }
+  }
+
   static Future<File> downloadVideo(
     String url, {
     void Function(String line)? onProgress,
   }) async {
-    final exe = await ytdlpPath();
     final tempDir = await getTemporaryDirectory();
+
+    if (Platform.isAndroid || (await FfmpegService.findExecutable('yt-dlp')) == null) {
+      return downloadNativeStream(url, tempDir, onProgress: onProgress);
+    }
+
+    final exe = await ytdlpPath();
     final time = DateTime.now().millisecondsSinceEpoch;
     final outPattern = '${tempDir.path}${Platform.pathSeparator}shitaka_yt_$time.%(ext)s';
 
@@ -51,10 +131,7 @@ class YtdlpService {
     try {
       process = await Process.start(exe, args);
     } on ProcessException catch (_) {
-      throw YtdlpNotFoundException(
-        'yt-dlp executable process is not available on this device.\n\n'
-        'Please run Shitaka Memes on Windows, macOS, or Linux for yt-dlp video downloading.',
-      );
+      return downloadNativeStream(url, tempDir, onProgress: onProgress);
     }
 
     final completer = Completer<int>();
@@ -83,7 +160,7 @@ class YtdlpService {
 
     final exitCode = await completer.future;
     if (exitCode != 0) {
-      throw Exception('yt-dlp failed with exit code $exitCode');
+      return downloadNativeStream(url, tempDir, onProgress: onProgress);
     }
 
     final list = tempDir.listSync().whereType<File>().where(
@@ -91,7 +168,7 @@ class YtdlpService {
         ).toList();
 
     if (list.isEmpty) {
-      throw Exception('Downloaded file could not be found.');
+      return downloadNativeStream(url, tempDir, onProgress: onProgress);
     }
 
     return list.first;
@@ -102,6 +179,10 @@ class YtdlpService {
     Directory targetDir, {
     void Function(String line)? onProgress,
   }) async {
+    if (Platform.isAndroid || (await FfmpegService.findExecutable('yt-dlp')) == null) {
+      return downloadNativeStream(url, targetDir, onProgress: onProgress);
+    }
+
     final exe = await ytdlpPath();
     final time = DateTime.now().millisecondsSinceEpoch;
     final outPattern =
@@ -121,10 +202,7 @@ class YtdlpService {
     try {
       process = await Process.start(exe, args);
     } on ProcessException catch (_) {
-      throw YtdlpNotFoundException(
-        'yt-dlp executable process is not available on this device.\n\n'
-        'Please run Shitaka Memes on Windows, macOS, or Linux for yt-dlp video downloading.',
-      );
+      return downloadNativeStream(url, targetDir, onProgress: onProgress);
     }
     final completer = Completer<int>();
 
@@ -152,7 +230,7 @@ class YtdlpService {
 
     final exitCode = await completer.future;
     if (exitCode != 0) {
-      throw Exception('yt-dlp failed with exit code $exitCode');
+      return downloadNativeStream(url, targetDir, onProgress: onProgress);
     }
 
     final list = targetDir
@@ -162,7 +240,7 @@ class YtdlpService {
         .toList();
 
     if (list.isEmpty) {
-      throw Exception('Downloaded file could not be found.');
+      return downloadNativeStream(url, targetDir, onProgress: onProgress);
     }
 
     return list.first;
