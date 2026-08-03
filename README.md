@@ -36,6 +36,36 @@
 - **Live FFmpeg progress** — real frame/speed logs and per-file progress bars
 - **History** — every job logged with before/after sizes and % annihilated
 - **Pure Material 3** — `ColorScheme.fromSeed` theming, zero custom assets, dark + light themes
+- **CLI mode** — crush files straight from the terminal, no GUI needed
+
+---
+
+## 🖥 Command Line Usage
+
+The same binary doubles as a CLI. Pass any files/options and it runs headless — great for scripting:
+
+```bash
+# Crush a file to 10 KB (default)
+shitaka_memes meme.png
+
+# Target a specific size in KB
+shitaka_memes -t 5 meme.jpg
+
+# Crush several files at once, mute a video, pick an output dir
+shitaka_memes -t 20 -m true clip.mp4 pic.jpg -o ~/compressed
+
+# Show help
+shitaka_memes --help
+```
+
+| Flag | Description | Default |
+|---|---|---|
+| `-t, --target <KB>` | Target size in KB | `10` |
+| `-m, --mute [true\|false]` | Strip video audio | `true` |
+| `-o, --output <dir>` | Output directory | `~/Documents/shitaka_memes` |
+| `-h, --help` | Show usage | — |
+
+Outputs are written as `SHIT-<name>.jpg` / `SHIT-<name>.mp4` (videos also get a `THUMB-<name>.jpg`). The CLI works on every platform the app builds for.
 
 ---
 
@@ -81,13 +111,14 @@ flutter build macos --release
 
 ## 🤖 CI / Auto-Builds
 
-A GitHub Actions workflow (`.github/workflows/release.yml`) builds **Windows & macOS** automatically:
+A GitHub Actions workflow (`.github/workflows/release.yml`) builds **Linux, Windows & macOS** automatically:
 
 - **On every push to `main`** → artifacts uploaded as GitHub Actions artifacts (7-day retention)
 - **On every tag `v*`** → binaries attached to the GitHub Release
 
 | Runner | Trigger | Artifact |
 |---|---|---|
+| `ubuntu-latest` | push to main / tag | `shitaka-memes-linux-x64.tar.gz` |
 | `windows-latest` | push to main / tag | `shitaka-memes-windows-x64.zip` (`.exe` + libs) |
 | `macos-latest` | push to main / tag | `shitaka-memes-macos.zip` (`.app`) |
 
