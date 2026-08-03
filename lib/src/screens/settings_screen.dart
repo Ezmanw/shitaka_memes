@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../services/ffmpeg_service.dart';
 import '../services/settings_service.dart';
-import '../services/ytdlp_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});

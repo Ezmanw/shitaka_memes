@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../models/compression_job.dart';
-import '../services/ffmpeg_service.dart';
 import '../services/history_store.dart';
 import '../services/size_formatter.dart';
 
