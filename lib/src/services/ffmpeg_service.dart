@@ -356,6 +356,8 @@ class FfmpegService {
       try {
         onProgress?.call(null, 'Assaulting video frames natively...');
 
+        final inputSize = File(input).existsSync() ? File(input).lengthSync() : 0;
+
         // 1. Primary Engine: LightCompressor (Android native MediaCodec)
         try {
           final lightCompressor = lc.LightCompressor();
@@ -365,6 +367,18 @@ class FfmpegService {
                   ? lc.VideoQuality.low
                   : lc.VideoQuality.medium);
 
+          // Calculate target megabytes for LightCompressor
+          int targetMb = (targetBytes / (1000 * 1000)).floor();
+          if (targetMb < 1) targetMb = 1;
+
+          // If input is larger than targetMb, force targetMb to be smaller than original
+          if (inputSize > 0) {
+            final inputMb = (inputSize / (1000 * 1000)).floor();
+            if (targetMb >= inputMb && inputMb > 1) {
+              targetMb = (inputMb * 0.6).floor().clamp(1, inputMb - 1);
+            }
+          }
+
           final response = await lightCompressor.compressVideo(
             path: input,
             videoQuality: quality,
@@ -372,6 +386,8 @@ class FfmpegService {
             ios: lc.IOSConfig(saveInGallery: false),
             video: lc.Video(
               videoName: 'SHIT_${DateTime.now().millisecondsSinceEpoch}.mp4',
+              targetSizeMb: targetMb,
+              twoPass: true,
             ),
             isMinBitrateCheckEnabled: false,
             disableAudio: mute,
@@ -380,12 +396,15 @@ class FfmpegService {
           if (response is lc.OnSuccess) {
             final dest = response.destinationPath;
             if (dest.isNotEmpty && File(dest).existsSync()) {
-              final outFile = File(output);
-              await outFile.parent.create(recursive: true);
-              await File(dest).copy(output);
-              final size = await _fileSize(output);
+              final compressedFile = File(dest);
+              final compSize = compressedFile.lengthSync();
 
-              if (size > 0) {
+              if (compSize > 0) {
+                final outFile = File(output);
+                await outFile.parent.create(recursive: true);
+                await compressedFile.copy(output);
+                final size = await _fileSize(output);
+
                 String? thumb;
                 if (thumbnailOut != null) {
                   try {
@@ -411,9 +430,15 @@ class FfmpegService {
         // 2. Secondary Engine: VideoCompress
         vc.MediaInfo? info;
         try {
+          final vcQuality = targetBytes < 2 * 1024 * 1024
+              ? vc.VideoQuality.LowQuality
+              : (targetBytes < 10 * 1024 * 1024
+                  ? vc.VideoQuality.MediumQuality
+                  : vc.VideoQuality.Res960x540Quality);
+
           info = await vc.VideoCompress.compressVideo(
             input,
-            quality: vc.VideoQuality.LowQuality,
+            quality: vcQuality,
             deleteOrigin: false,
             includeAudio: !mute,
           );
