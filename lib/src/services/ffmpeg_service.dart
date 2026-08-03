@@ -170,7 +170,17 @@ class FfmpegService {
     required int targetBytes,
     ProgressCallback? onProgress,
   }) async {
+    final isGif = input.toLowerCase().endsWith('.gif') || output.toLowerCase().endsWith('.gif');
+
     if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
+      if (isGif) {
+        return compressGifDart(
+          input: input,
+          output: output,
+          targetBytes: targetBytes,
+          onProgress: onProgress,
+        );
+      }
       return compressImageDart(
         input: input,
         output: output,
@@ -194,7 +204,6 @@ class FfmpegService {
         '-i', input,
         '-vf', "scale='trunc(min($scale,iw)/2)*2':-2${gray ? ',format=gray' : ''}",
         '-q:v', '$q',
-        '-frames:v', '1',
         output,
       ];
 
@@ -206,6 +215,14 @@ class FfmpegService {
         if (current > 0 && current <= target) break;
         if (current <= 0) break;
       } on ProcessException catch (_) {
+        if (isGif) {
+          return compressGifDart(
+            input: input,
+            output: output,
+            targetBytes: targetBytes,
+            onProgress: onProgress,
+          );
+        }
         return compressImageDart(
           input: input,
           output: output,
@@ -220,6 +237,51 @@ class FfmpegService {
     }
 
     return CompressionResult(outputBytes: current > 0 ? current : 0);
+  }
+
+  static Future<CompressionResult> compressGifDart({
+    required String input,
+    required String output,
+    required int targetBytes,
+    ProgressCallback? onProgress,
+  }) async {
+    try {
+      final bytes = await File(input).readAsBytes();
+      final decoded = img.decodeGif(bytes) ?? img.decodeImage(bytes);
+      if (decoded == null) {
+        await File(input).copy(output);
+        return CompressionResult(outputBytes: await _fileSize(output));
+      }
+
+      int width = decoded.width;
+      int current = -1;
+
+      for (int i = 0; i < 18; i++) {
+        final resized = (width < decoded.width)
+            ? img.copyResize(decoded, width: width)
+            : decoded;
+
+        final encoded = img.encodeGif(resized);
+        await File(output).writeAsBytes(encoded);
+        current = encoded.length;
+
+        onProgress?.call(null, _imageLog(width, 10, current, targetBytes));
+
+        if (current > 0 && current <= targetBytes) break;
+
+        width = (width * 3) ~/ 4;
+        if (width < 48) break;
+      }
+
+      return CompressionResult(outputBytes: current > 0 ? current : 0);
+    } catch (_) {
+      try {
+        await File(input).copy(output);
+        return CompressionResult(outputBytes: await _fileSize(output));
+      } catch (_) {
+        return CompressionResult(outputBytes: 0);
+      }
+    }
   }
 
   static Future<CompressionResult> compressImageDart({
@@ -288,6 +350,12 @@ class FfmpegService {
     required bool mute,
     ProgressCallback? onProgress,
   }) async {
+    if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
+      throw FfmpegNotFoundException(
+        'Video compression via FFmpeg requires desktop Windows/Linux/macOS binaries.\n\n'
+        'On Android, please use YouTube / web video downloading with direct save, or crush images & GIFs natively!',
+      );
+    }
     final ffmpeg = await ffmpegPath();
     final ffprobe = await ffprobePath();
 

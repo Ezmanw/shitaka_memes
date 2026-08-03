@@ -67,7 +67,7 @@ class _CompressScreenState extends State<CompressScreen> {
       });
 
       final safeBase = item.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final ext = item.isVideo ? 'mp4' : 'jpg';
+      final ext = item.isVideo ? 'mp4' : (item.ext.toLowerCase() == 'gif' ? 'gif' : 'jpg');
       final outputPath = '${outDir.path}${Platform.pathSeparator}'
           'SHIT-${safeBase.replaceFirst(RegExp(r'\.[^.]+$'), '')}.$ext';
 
