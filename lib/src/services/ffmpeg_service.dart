@@ -29,26 +29,6 @@ class FfmpegService {
   static String? _ffmpegPath;
   static String? _ffprobePath;
 
-  static Future<String> ffmpegPath() async {
-    if (_ffmpegPath != null) return _ffmpegPath!;
-    final found = await _findExecutable('ffmpeg');
-    if (found == null) {
-      throw FfmpegNotFoundException(
-        'ffmpeg was not found on this system.\n\n'
-        'Install it with:\n  sudo apt install ffmpeg\n\n'
-        'and restart the app.',
-      );
-    }
-    _ffmpegPath = found;
-    return found;
-  }
-
-  static Future<String?> ffprobePath() async {
-    if (_ffprobePath != null) return _ffprobePath;
-    _ffprobePath = await _findExecutable('ffprobe');
-    return _ffprobePath;
-  }
-
   static Future<String?> _findExecutable(String name) async {
     final result = await Process.run('which', [name]);
     if (result.exitCode == 0) {
@@ -73,6 +53,26 @@ class FfmpegService {
       await dir.create(recursive: true);
     }
     return dir;
+  }
+
+  static Future<String> ffmpegPath() async {
+    if (_ffmpegPath != null) return _ffmpegPath!;
+    final found = await _findExecutable('ffmpeg');
+    if (found == null) {
+      throw FfmpegNotFoundException(
+        'ffmpeg was not found on this system.\n\n'
+        'Install it with:\n  sudo apt install ffmpeg\n\n'
+        'and restart the app.',
+      );
+    }
+    _ffmpegPath = found;
+    return found;
+  }
+
+  static Future<String?> ffprobePath() async {
+    if (_ffprobePath != null) return _ffprobePath;
+    _ffprobePath = await _findExecutable('ffprobe');
+    return _ffprobePath;
   }
 
   static Future<CompressionResult> compressImage({

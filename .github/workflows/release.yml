@@ -1,35 +1,14 @@
-name: Build all platforms
+name: Build Windows & macOS
 
 on:
   push:
+    branches: [main]
+  workflow_dispatch:
+  push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
-  android:
-    name: Android (APK + AAB)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - run: flutter pub get
-      - run: flutter build appbundle --release
-      - run: flutter build apk --release
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build/app/outputs/bundle/release/app-release.aab
-            build/app/outputs/flutter-apk/app-release.apk
-
   windows:
     name: Windows
     runs-on: windows-latest
@@ -46,10 +25,19 @@ jobs:
         run: |
           Compress-Archive -Path build/windows/x64/runner/Release/* `
             -DestinationPath shitaka-memes-windows-x64.zip
-      - name: Upload to release
+      - name: Upload to release (tagged)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: shitaka-memes-windows-x64.zip
+          tag_name: ${{ github.ref_name }}
+      - name: Upload artifact (push)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: shitaka-memes-windows-x64
+          path: shitaka-memes-windows-x64.zip
+          retention-days: 7
 
   macos:
     name: macOS
@@ -65,45 +53,17 @@ jobs:
       - name: Package .app
         run: |
           cd build/macos/Build/Products/Release
-          ditto -c -k --sequesterRsrc --keepParent "Shitaka Memes.app" "$RUNNER_TEMP/shitaka-memes-macos.zip"
-      - name: Upload to release
+          ditto -c -k --sequesterRsrc --keepParent "Shitaka Memes.app" "${{ runner.temp }}/shitaka-memes-macos.zip"
+      - name: Upload to release (tagged)
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ runner.temp }}/shitaka-memes-macos.zip
-
-  ios:
-    name: iOS (unsigned)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+          tag_name: ${{ github.ref_name }}
+      - name: Upload artifact (push)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
         with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
-      - name: Package .app
-        run: |
-          cd build/ios/iphoneos
-          ditto -c -k --sequesterRsrc --keepParent Runner.app "$RUNNER_TEMP/shitaka-memes-ios-unsigned.zip"
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ runner.temp }}/shitaka-memes-ios-unsigned.zip
-
-  linux:
-    name: Linux artifacts
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build libgtk-3-dev
-      - run: flutter pub get
-      - run: flutter build linux --release
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/linux/x64/release/bundle/shitaka_memes
+          name: shitaka-memes-macos
+          path: ${{ runner.temp }}/shitaka-memes-macos.zip
+          retention-days: 7

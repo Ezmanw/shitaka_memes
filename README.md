@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Shitaka%20Memes-v1.0.0-8BC34A?style=for-the-badge&logo=flutter&logoColor=white" alt="Shitaka Memes v1.0.0">
-  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Android-8BC34A?style=for-the-badge&logo=linux&logoColor=white" alt="Platforms">
+  <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-8BC34A?style=for-the-badge&logo=linux&logoColor=white" alt="Platforms">
   <img src="https://img.shields.io/badge/Built%20with-Flutter%203.32-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License">
 </p>
@@ -13,7 +13,7 @@
 
 ---
 
-## 📥 Download
+## 📥 Download (v1.0.0)
 
 | Platform | Download | Size |
 |---|---|---|
@@ -21,11 +21,8 @@
 | **Linux (.rpm)** | [`shitaka-memes-1.0.0-1.x86_64.rpm`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-1.x86_64.rpm) | 8.7 MB |
 | **Linux (AppImage)** | [`Shitaka_Memes-1.0.0-x86_64.AppImage`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/Shitaka_Memes-1.0.0-x86_64.AppImage) | 29 MB |
 | **Linux (tar.gz)** | [`shitaka-memes-1.0.0-linux-x64.tar.gz`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-linux-x64.tar.gz) | 18 MB |
-| **Android (universal)** | [`shitaka-memes-1.0.0-android-universal.apk`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-android-universal.apk) | 22 MB |
-| **Android (arm64)** | [`shitaka-memes-1.0.0-android-arm64.apk`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-android-arm64.apk) | 14 MB |
-| **Android (armv7)** | [`shitaka-memes-1.0.0-android-armeabi-v7a.apk`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-android-armeabi-v7a.apk) | 13 MB |
-| **Android (x86_64)** | [`shitaka-memes-1.0.0-android-x86_64.apk`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-android-x86_64.apk) | 14 MB |
-| **Android (AAB / Play Store)** | [`shitaka-memes-1.0.0-android.aab`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-1.0.0-android.aab) | 41 MB |
+| **Windows (x64)** | [`shitaka-memes-windows-x64.zip`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-windows-x64.zip) | — |
+| **macOS (Apple Silicon/Intel)** | [`shitaka-memes-macos.zip`](https://github.com/Ezmanw/shitaka_memes/releases/download/v1.0.0/shitaka-memes-macos.zip) | — |
 
 > **Linux quick install:** `sudo ./install.sh` (auto-detects your distro)
 
@@ -39,7 +36,6 @@
 - **Live FFmpeg progress** — real frame/speed logs and per-file progress bars
 - **History** — every job logged with before/after sizes and % annihilated
 - **Pure Material 3** — `ColorScheme.fromSeed` theming, zero custom assets, dark + light themes
-- **Android ready** — FFmpeg bundled inside the APK (no system dependency)
 
 ---
 
@@ -48,7 +44,7 @@
 | Platform | Needs |
 |---|---|
 | **Linux** | `ffmpeg` + `ffprobe` on PATH (`sudo apt install ffmpeg`) |
-| **Android** | Nothing — FFmpeg bundled inside the APK |
+| **Windows / macOS** | FFmpeg bundled automatically by CI |
 
 ---
 
@@ -59,9 +55,13 @@
 flutter pub get
 flutter run -d linux
 
-# Android
+# Windows (on Windows)
 flutter pub get
-flutter run -d android
+flutter run -d windows
+
+# macOS (on macOS)
+flutter pub get
+flutter run -d macos
 ```
 
 ## 📦 Build Release Bundles
@@ -69,10 +69,6 @@ flutter run -d android
 ```bash
 # Linux
 flutter build linux --release
-
-# Android (all ABIs + AAB)
-flutter build apk --release --split-per-abi
-flutter build appbundle --release
 
 # Windows (on Windows)
 flutter build windows --release
@@ -83,23 +79,25 @@ flutter build macos --release
 
 ---
 
-## 🤖 CI / Cross-Platform Builds
+## 🤖 CI / Auto-Builds
 
-A GitHub Actions workflow (`.github/workflows/release.yml`) builds **all platforms** on every `v*` tag:
+A GitHub Actions workflow (`.github/workflows/release.yml`) builds **Windows & macOS** automatically:
 
-| Runner | Artifact |
-|---|---|
-| `ubuntu-latest` | Linux binary, Android APKs + AAB |
-| `windows-latest` | `shitaka-memes-windows-x64.zip` (`.exe` + libs) |
-| `macos-latest` | `shitaka-memes-macos.zip` (`.app`) |
-| `macos-latest` (iOS) | `shitaka-memes-ios-unsigned.zip` (needs signing) |
+- **On every push to `main`** → artifacts uploaded as GitHub Actions artifacts (7-day retention)
+- **On every tag `v*`** → binaries attached to the GitHub Release
+
+| Runner | Trigger | Artifact |
+|---|---|---|
+| `windows-latest` | push to main / tag | `shitaka-memes-windows-x64.zip` (`.exe` + libs) |
+| `macos-latest` | push to main / tag | `shitaka-memes-macos.zip` (`.app`) |
 
 ---
 
 ## 📂 Output Location
 
 - **Linux:** `~/Documents/shitaka_memes/`
-- **Android:** App-private storage (accessible via the app)
+- **Windows:** App install directory
+- **macOS:** `~/Documents/shitaka_memes/`
 
 ---
 
