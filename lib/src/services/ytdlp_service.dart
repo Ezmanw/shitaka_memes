@@ -10,6 +10,9 @@ import 'ffmpeg_service.dart';
 class YtdlpNotFoundException implements Exception {
   final String message;
   YtdlpNotFoundException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 class YtdlpService {

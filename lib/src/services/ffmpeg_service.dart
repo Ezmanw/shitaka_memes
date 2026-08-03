@@ -12,6 +12,9 @@ typedef ProgressCallback = void Function(double? fraction, String logLine);
 class FfmpegNotFoundException implements Exception {
   final String message;
   FfmpegNotFoundException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 class CompressionResult {
