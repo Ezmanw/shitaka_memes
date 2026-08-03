@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import 'settings_service.dart';
@@ -166,6 +167,15 @@ class FfmpegService {
     required int targetBytes,
     ProgressCallback? onProgress,
   }) async {
+    if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
+      return compressImageDart(
+        input: input,
+        output: output,
+        targetBytes: targetBytes,
+        onProgress: onProgress,
+      );
+    }
+
     final ffmpeg = await ffmpegPath();
     final target = targetBytes;
     int scale = 1024;
@@ -193,12 +203,12 @@ class FfmpegService {
         if (current > 0 && current <= target) break;
         if (current <= 0) break;
       } on ProcessException catch (_) {
-        // Fallback: Copy input image directly if FFmpeg binary is unavailable
-        try {
-          await File(input).copy(output);
-          current = await _fileSize(output);
-        } catch (_) {}
-        break;
+        return compressImageDart(
+          input: input,
+          output: output,
+          targetBytes: targetBytes,
+          onProgress: onProgress,
+        );
       }
 
       scale = (scale * 3) ~/ 4;
@@ -207,6 +217,53 @@ class FfmpegService {
     }
 
     return CompressionResult(outputBytes: current > 0 ? current : 0);
+  }
+
+  static Future<CompressionResult> compressImageDart({
+    required String input,
+    required String output,
+    required int targetBytes,
+    ProgressCallback? onProgress,
+  }) async {
+    try {
+      final bytes = await File(input).readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        await File(input).copy(output);
+        return CompressionResult(outputBytes: await _fileSize(output));
+      }
+
+      int width = decoded.width;
+      int quality = 85;
+      int current = -1;
+
+      for (int i = 0; i < 18; i++) {
+        final resized = (width < decoded.width)
+            ? img.copyResize(decoded, width: width)
+            : decoded;
+
+        final encoded = img.encodeJpg(resized, quality: quality);
+        await File(output).writeAsBytes(encoded);
+        current = encoded.length;
+
+        onProgress?.call(null, _imageLog(width, quality, current, targetBytes));
+
+        if (current > 0 && current <= targetBytes) break;
+
+        width = (width * 3) ~/ 4;
+        quality = math.max(10, quality - 15);
+        if (width < 64) break;
+      }
+
+      return CompressionResult(outputBytes: current > 0 ? current : 0);
+    } catch (_) {
+      try {
+        await File(input).copy(output);
+        return CompressionResult(outputBytes: await _fileSize(output));
+      } catch (_) {
+        return CompressionResult(outputBytes: 0);
+      }
+    }
   }
 
   static String _imageLog(int scale, int q, int size, int target) {
