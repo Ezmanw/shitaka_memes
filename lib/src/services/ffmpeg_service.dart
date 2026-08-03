@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
+import 'package:video_compress/video_compress.dart';
 
 import 'settings_service.dart';
 
@@ -351,10 +352,50 @@ class FfmpegService {
     ProgressCallback? onProgress,
   }) async {
     if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
-      throw FfmpegNotFoundException(
-        'Video compression via FFmpeg requires desktop Windows/Linux/macOS binaries.\n\n'
-        'On Android, please use YouTube / web video downloading with direct save, or crush images & GIFs natively!',
-      );
+      try {
+        onProgress?.call(null, 'Assaulting video frames natively...');
+
+        final quality = targetBytes < 500 * 1024
+            ? VideoQuality.LowQuality
+            : (targetBytes < 2 * 1024 * 1024
+                ? VideoQuality.MediumQuality
+                : VideoQuality.DefaultQuality);
+
+        final info = await VideoCompress.compressVideo(
+          input,
+          quality: quality,
+          deleteOrigin: false,
+        );
+
+        if (info != null && info.file != null) {
+          await info.file!.copy(output);
+          final size = await _fileSize(output);
+
+          String? thumb;
+          if (thumbnailOut != null) {
+            try {
+              final thumbFile = await VideoCompress.getFileThumbnail(input);
+              await thumbFile.copy(thumbnailOut);
+              thumb = thumbnailOut;
+            } catch (_) {}
+          }
+
+          onProgress?.call(1.0, 'Finished native video compression!');
+          return CompressionResult(
+            outputBytes: size,
+            thumbnailPath: thumb,
+          );
+        }
+      } catch (e) {
+        onProgress?.call(null, 'Error during native compression: $e');
+      }
+
+      try {
+        await File(input).copy(output);
+        return CompressionResult(outputBytes: await _fileSize(output));
+      } catch (_) {
+        return CompressionResult(outputBytes: 0);
+      }
     }
     final ffmpeg = await ffmpegPath();
     final ffprobe = await ffprobePath();
