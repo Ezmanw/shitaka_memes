@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
@@ -352,68 +350,10 @@ class FfmpegService {
     required bool mute,
     ProgressCallback? onProgress,
   }) async {
-    if (Platform.isAndroid) {
-      final target = targetBytes;
-      int scale = 640;
-      int fps = 24;
-      int crf = 30;
-      int current = -1;
-
-      for (int i = 0; i < 18; i++) {
-        final command = [
-          '-y',
-          '-hide_banner',
-          '-i', '"$input"',
-          '-vf', '"scale=\'trunc(min($scale,iw)/2)*2\':-2,fps=$fps"',
-          '-c:v', 'libx264',
-          '-preset', 'veryfast',
-          '-crf', '$crf',
-          if (mute)
-            '-an'
-          else ...[
-            '-c:a', 'aac',
-            '-b:a', '12k',
-          ],
-          '-movflags', '+faststart',
-          '"$output"',
-        ].join(' ');
-
-        final session = await FFmpegKit.execute(command);
-        final returnCode = await session.getReturnCode();
-
-        if (ReturnCode.isSuccess(returnCode)) {
-          current = await _fileSize(output);
-          onProgress?.call(null, _videoLog(scale, crf, current, target));
-
-          if (current > 0 && current <= target) break;
-        }
-
-        scale = (scale * 3) ~/ 4;
-        crf = math.min(51, crf + 4);
-        fps = math.max(12, fps - 4);
-        if (scale < 160) break;
-      }
-
-      if (thumbnailOut != null) {
-        final thumbCmd = '-y -hide_banner -i "$input" -ss 0 -frames:v 1 "$thumbnailOut"';
-        await FFmpegKit.execute(thumbCmd);
-      }
-
-      String? thumb;
-      if (thumbnailOut != null && File(thumbnailOut).existsSync()) {
-        thumb = thumbnailOut;
-      }
-
-      return CompressionResult(
-        outputBytes: current > 0 ? current : 0,
-        thumbnailPath: thumb,
-      );
-    }
-
-    if ((await findExecutable('ffmpeg')) == null) {
+    if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
       throw FfmpegNotFoundException(
-        'FFmpeg executable was not found on this system.\n\n'
-        'Please ensure FFmpeg is installed in system PATH or placed in the application folder.',
+        'Video compression via FFmpeg requires desktop Windows/Linux/macOS binaries.\n\n'
+        'On Android, please use YouTube / web video downloading with direct save, or crush images & GIFs natively!',
       );
     }
     final ffmpeg = await ffmpegPath();
