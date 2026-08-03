@@ -47,7 +47,15 @@ class YtdlpService {
       url.trim(),
     ];
 
-    final process = await Process.start(exe, args);
+    Process process;
+    try {
+      process = await Process.start(exe, args);
+    } on ProcessException catch (_) {
+      throw YtdlpNotFoundException(
+        'yt-dlp executable process is not available on this device.\n\n'
+        'Please run Shitaka Memes on Windows, macOS, or Linux for yt-dlp video downloading.',
+      );
+    }
 
     final completer = Completer<int>();
 
@@ -109,7 +117,15 @@ class YtdlpService {
       url.trim(),
     ];
 
-    final process = await Process.start(exe, args);
+    Process process;
+    try {
+      process = await Process.start(exe, args);
+    } on ProcessException catch (_) {
+      throw YtdlpNotFoundException(
+        'yt-dlp executable process is not available on this device.\n\n'
+        'Please run Shitaka Memes on Windows, macOS, or Linux for yt-dlp video downloading.',
+      );
+    }
     final completer = Completer<int>();
 
     process.stdout

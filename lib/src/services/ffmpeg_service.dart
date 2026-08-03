@@ -185,12 +185,21 @@ class FfmpegService {
         output,
       ];
 
-      await Process.run(ffmpeg, args);
-      current = await _fileSize(output);
-      onProgress?.call(null, _imageLog(scale, q, current, target));
+      try {
+        await Process.run(ffmpeg, args);
+        current = await _fileSize(output);
+        onProgress?.call(null, _imageLog(scale, q, current, target));
 
-      if (current > 0 && current <= target) break;
-      if (current <= 0) break;
+        if (current > 0 && current <= target) break;
+        if (current <= 0) break;
+      } on ProcessException catch (_) {
+        // Fallback: Copy input image directly if FFmpeg binary is unavailable
+        try {
+          await File(input).copy(output);
+          current = await _fileSize(output);
+        } catch (_) {}
+        break;
+      }
 
       scale = (scale * 3) ~/ 4;
       q = math.min(31, q + 4);
@@ -321,7 +330,15 @@ class FfmpegService {
     ProgressCallback? onProgress,
     void Function(String line)? onLine,
   }) async {
-    final process = await Process.start(exe, args);
+    Process process;
+    try {
+      process = await Process.start(exe, args);
+    } on ProcessException catch (_) {
+      throw FfmpegNotFoundException(
+        'FFmpeg executable process is not available on this device.\n\n'
+        'On Android, please use yt-dlp "Save Direct (No Compression)" or run Shitaka Memes on Desktop.',
+      );
+    }
     final stderr = process.stderr.transform(
       const SystemEncoding().decoder,
     ).transform(const LineSplitter());
