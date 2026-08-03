@@ -181,6 +181,7 @@ class RootScreen extends StatefulWidget {
 
 class _RootScreenState extends State<RootScreen> {
   int _index = 0;
+  bool _isSidebarExtended = true;
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +190,51 @@ class _RootScreenState extends State<RootScreen> {
       HistoryScreen(),
       AboutScreen(),
     ];
+
+    final isWide = MediaQuery.of(context).size.width >= 640;
+
+    if (isWide) {
+      return Scaffold(
+        body: Row(
+          children: [
+            SafeArea(
+              child: NavigationRail(
+                extended: _isSidebarExtended,
+                minExtendedWidth: 180,
+                leading: IconButton(
+                  tooltip: _isSidebarExtended ? 'Collapse sidebar' : 'Expand sidebar',
+                  icon: Icon(_isSidebarExtended ? Icons.menu_open : Icons.menu),
+                  onPressed: () => setState(() => _isSidebarExtended = !_isSidebarExtended),
+                ),
+                selectedIndex: _index,
+                onDestinationSelected: (i) => setState(() => _index = i),
+                destinations: const [
+                  NavigationRailDestination(
+                    icon: Icon(Icons.compress_outlined),
+                    selectedIcon: Icon(Icons.compress),
+                    label: Text('Compress'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.history_outlined),
+                    selectedIcon: Icon(Icons.history),
+                    label: Text('History'),
+                  ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.info_outline),
+                    selectedIcon: Icon(Icons.info),
+                    label: Text('About'),
+                  ),
+                ],
+              ),
+            ),
+            const VerticalDivider(thickness: 1, width: 1),
+            Expanded(
+              child: IndexedStack(index: _index, children: screens),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       body: IndexedStack(index: _index, children: screens),
