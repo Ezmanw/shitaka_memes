@@ -115,9 +115,59 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: () => Navigator.of(dialogContext).pop(),
                     child: const Text('Cancel'),
                   ),
+                if (!downloading)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.download_for_offline_outlined),
+                    label: const Text('Save Direct (No Compression)'),
+                    onPressed: () async {
+                      final url = urlController.text.trim();
+                      if (url.isEmpty) return;
+
+                      setDialogState(() {
+                        downloading = true;
+                        statusLog = 'Downloading video uncompressed...';
+                      });
+
+                      try {
+                        final outDir = await FfmpegService.outputDirectory();
+                        final file = await YtdlpService.downloadVideoToDirectory(
+                          url,
+                          outDir,
+                          onProgress: (line) {
+                            setDialogState(() => statusLog = line);
+                          },
+                        );
+
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop();
+                        }
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Saved to ${file.path.split(Platform.pathSeparator).last}!',
+                              ),
+                              action: SnackBarAction(
+                                label: 'Open Folder',
+                                onPressed: () {
+                                  FfmpegService.openPath(outDir.path);
+                                },
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          downloading = false;
+                          statusLog = 'Error: $e';
+                        });
+                      }
+                    },
+                  ),
                 FilledButton.icon(
-                  icon: Icon(downloading ? Icons.downloading : Icons.download),
-                  label: Text(downloading ? 'Downloading...' : 'Fetch & Add'),
+                  icon: Icon(downloading ? Icons.downloading : Icons.compress),
+                  label: Text(downloading ? 'Downloading...' : 'Fetch & Compress'),
                   onPressed: downloading
                       ? null
                       : () async {
@@ -137,7 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               },
                             );
 
-                            final name = file.path.split(Platform.pathSeparator).last;
+                            final name =
+                                file.path.split(Platform.pathSeparator).last;
                             final size = await file.length();
 
                             final item = MediaItem(
