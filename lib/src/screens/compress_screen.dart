@@ -187,15 +187,17 @@ class _CompressScreenState extends State<CompressScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (exists)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  file,
-                  maxHeight: 300,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: Icon(Icons.broken_image, size: 48)),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(
+                    file,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: Icon(Icons.broken_image, size: 48)),
+                    ),
                   ),
                 ),
               )
@@ -629,6 +631,7 @@ class _CompressScreenState extends State<CompressScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
