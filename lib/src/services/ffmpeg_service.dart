@@ -43,6 +43,15 @@ class FfmpegService {
       }
     } catch (_) {}
 
+    // 1b. Check in application support directory
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      final supportExe = File('${supportDir.path}${Platform.pathSeparator}$exeName');
+      if (await supportExe.exists()) {
+        return supportExe.path;
+      }
+    } catch (_) {}
+
     // 2. Check system PATH using OS-appropriate lookup tool
     try {
       final command = Platform.isWindows ? 'where.exe' : 'which';
@@ -59,6 +68,42 @@ class FfmpegService {
     } catch (_) {}
 
     return null;
+  }
+
+  static Future<void> downloadFfmpegAuto({
+    void Function(String status)? onProgress,
+  }) async {
+    final supportDir = await getApplicationSupportDirectory();
+    if (!await supportDir.exists()) {
+      await supportDir.create(recursive: true);
+    }
+
+    if (Platform.isWindows) {
+      onProgress?.call('Fetching FFmpeg static build for Windows...');
+      final zipPath = '${supportDir.path}${Platform.pathSeparator}ffmpeg_temp.zip';
+      final extractDir = '${supportDir.path}${Platform.pathSeparator}ffmpeg_temp_dir';
+
+      final script = '''
+        Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "$zipPath"
+        Expand-Archive -Path "$zipPath" -DestinationPath "$extractDir" -Force
+        \$fExe = Get-ChildItem -Path "$extractDir" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+        \$fpExe = Get-ChildItem -Path "$extractDir" -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
+        Copy-Item -Path \$fExe.FullName -Destination "${supportDir.path}" -Force
+        Copy-Item -Path \$fpExe.FullName -Destination "${supportDir.path}" -Force
+        Remove-Item -Path "$zipPath" -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "$extractDir" -Recurse -Force -ErrorAction SilentlyContinue
+      ''';
+
+      final process = await Process.run('powershell', ['-Command', script]);
+      if (process.exitCode != 0) {
+        throw Exception('Failed to download FFmpeg: ${process.stderr}');
+      }
+    } else {
+      throw Exception('Automatic download is supported on Windows. Please install FFmpeg via your package manager.');
+    }
+
+    _ffmpegPath = null;
+    _ffprobePath = null;
   }
 
   static int targetBytesForKb(num kb) {

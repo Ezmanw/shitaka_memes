@@ -352,6 +352,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool _downloadingFfmpeg = false;
+  String? _downloadFfmpegStatus;
+
   Widget _buildNoFfmpeg(ColorScheme scheme, TextTheme textTheme) {
     return Center(
       child: ConstrainedBox(
@@ -363,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.error_outline,
+                  Icons.warning_amber_rounded,
                   size: 48,
                   color: scheme.error,
                 ),
@@ -380,10 +383,58 @@ class _HomeScreenState extends State<HomeScreen> {
                       ?.copyWith(color: scheme.onSurfaceVariant),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
-                FilledButton.tonal(
-                  onPressed: _checkFfmpeg,
-                  child: const Text('Check again'),
+                if (_downloadingFfmpeg) ...[
+                  const SizedBox(height: 16),
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 8),
+                  Text(
+                    _downloadFfmpegStatus ?? 'Downloading FFmpeg...',
+                    style: textTheme.bodySmall,
+                  ),
+                ],
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    if (!_downloadingFfmpeg && Platform.isWindows)
+                      FilledButton.icon(
+                        icon: const Icon(Icons.download),
+                        label: const Text('Auto Download FFmpeg'),
+                        onPressed: () async {
+                          setState(() {
+                            _downloadingFfmpeg = true;
+                            _downloadFfmpegStatus = 'Starting download...';
+                          });
+                          try {
+                            await FfmpegService.downloadFfmpegAuto(
+                              onProgress: (s) {
+                                if (mounted) {
+                                  setState(() => _downloadFfmpegStatus = s);
+                                }
+                              },
+                            );
+                            await _checkFfmpeg();
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to download: $e')),
+                              );
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _downloadingFfmpeg = false);
+                            }
+                          }
+                        },
+                      ),
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Check again'),
+                      onPressed: _downloadingFfmpeg ? null : _checkFfmpeg,
+                    ),
+                  ],
                 ),
               ],
             ),
