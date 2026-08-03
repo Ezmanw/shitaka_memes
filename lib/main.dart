@@ -7,12 +7,14 @@ import 'src/screens/history_screen.dart';
 import 'src/screens/home_screen.dart';
 import 'src/services/ffmpeg_service.dart';
 import 'src/services/history_store.dart';
+import 'src/services/settings_service.dart';
 import 'src/services/size_formatter.dart';
 import 'src/theme.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await HistoryStore.instance.load();
+  await SettingsService.instance.load();
 
   if (args.isNotEmpty) {
     await _runCli(args);
@@ -151,12 +153,21 @@ class ShitakaMemesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Shitaka Memes',
-      debugShowCheckedModeBanner: false,
-      theme: buildLightTheme(),
-      darkTheme: buildDarkTheme(),
-      home: const RootScreen(),
+    return ListenableBuilder(
+      listenable: SettingsService.instance,
+      builder: (context, _) {
+        final seedColor = SettingsService.instance.seedColor;
+        final themeMode = SettingsService.instance.themeMode;
+
+        return MaterialApp(
+          title: 'Shitaka Memes',
+          debugShowCheckedModeBanner: false,
+          themeMode: themeMode,
+          theme: buildLightTheme(seedColor),
+          darkTheme: buildDarkTheme(seedColor),
+          home: const RootScreen(),
+        );
+      },
     );
   }
 }

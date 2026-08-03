@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
-const Color _seed = Color(0xFF8BC34A);
+const Color defaultSeedColor = Color(0xFF8BC34A);
 
-ThemeData buildLightTheme() => _build(Brightness.light);
+ThemeData buildLightTheme([Color seedColor = defaultSeedColor]) =>
+    _build(Brightness.light, seedColor);
 
-ThemeData buildDarkTheme() => _build(Brightness.dark);
+ThemeData buildDarkTheme([Color seedColor = defaultSeedColor]) =>
+    _build(Brightness.dark, seedColor);
 
-ThemeData _build(Brightness brightness) {
+ThemeData _build(Brightness brightness, Color seedColor) {
   final scheme = ColorScheme.fromSeed(
-    seedColor: _seed,
+    seedColor: seedColor,
     brightness: brightness,
   );
 

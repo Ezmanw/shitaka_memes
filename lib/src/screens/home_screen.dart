@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import '../models/media_item.dart';
 import '../services/ffmpeg_service.dart';
 import '../services/size_formatter.dart';
+import '../services/ytdlp_service.dart';
 import 'compress_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,6 +46,131 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _ffmpegError = e.message);
     } catch (_) {}
     _checkedFfmpeg = true;
+  }
+
+  Future<void> _showYtdlpDialog() async {
+    final urlController = TextEditingController();
+    String? statusLog;
+    bool downloading = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !downloading,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final scheme = Theme.of(context).colorScheme;
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.link),
+                  SizedBox(width: 8),
+                  Text('Import Web Video (yt-dlp)'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Paste any video URL (YouTube, TikTok, Twitter/X, Instagram, etc.):',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: urlController,
+                      enabled: !downloading,
+                      decoration: const InputDecoration(
+                        hintText: 'https://www.youtube.com/watch?v=...',
+                        prefixIcon: Icon(Icons.link_rounded),
+                      ),
+                    ),
+                    if (downloading) ...[
+                      const SizedBox(height: 16),
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          statusLog ?? 'Starting download...',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                          ),
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (!downloading)
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                FilledButton.icon(
+                  icon: Icon(downloading ? Icons.downloading : Icons.download),
+                  label: Text(downloading ? 'Downloading...' : 'Fetch & Add'),
+                  onPressed: downloading
+                      ? null
+                      : () async {
+                          final url = urlController.text.trim();
+                          if (url.isEmpty) return;
+
+                          setDialogState(() {
+                            downloading = true;
+                            statusLog = 'Connecting to yt-dlp...';
+                          });
+
+                          try {
+                            final file = await YtdlpService.downloadVideo(
+                              url,
+                              onProgress: (line) {
+                                setDialogState(() => statusLog = line);
+                              },
+                            );
+
+                            final name = file.path.split(Platform.pathSeparator).last;
+                            final size = await file.length();
+
+                            final item = MediaItem(
+                              path: file.path,
+                              name: name,
+                              isVideo: true,
+                              sizeBytes: size,
+                            );
+
+                            if (mounted) {
+                              setState(() {
+                                _files.add(item);
+                              });
+                            }
+
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              downloading = false;
+                              statusLog = 'Error: $e';
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    urlController.dispose();
   }
 
   Future<void> _pickFiles() async {
@@ -123,8 +250,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   int? _targetBytesFromInput() {
-    final parsed = double.tryParse(_kbController.text.trim());
-    if (parsed == null) return null;
+    final parsed = int.tryParse(_kbController.text.trim());
+    if (parsed == null || parsed <= 0) return null;
     return FfmpegService.targetBytesForKb(parsed);
   }
 
@@ -135,8 +262,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SHITAKA MEMES'),
+        title: const Text('Shitaka Memes'),
         actions: [
+          IconButton(
+            tooltip: 'Options & Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Help',
             icon: const Icon(Icons.help_outline),
@@ -265,17 +399,28 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonalIcon(
-                onPressed: _pickFiles,
-                icon: const Icon(Icons.folder_open),
-                label: Text(
-                  _files.isEmpty
-                      ? 'Pick images & videos'
-                      : 'Replace selection',
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: _pickFiles,
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(
+                      _files.isEmpty
+                          ? 'Pick files'
+                          : 'Replace selection',
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _showYtdlpDialog,
+                    icon: const Icon(Icons.link),
+                    label: const Text('Paste URL'),
+                  ),
+                ),
+              ],
             ),
             if (_files.isNotEmpty) ...[
               const SizedBox(height: 12),

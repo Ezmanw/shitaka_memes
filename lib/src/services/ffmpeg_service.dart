@@ -4,6 +4,8 @@ import 'dart:math' as math;
 
 import 'package:path_provider/path_provider.dart';
 
+import 'settings_service.dart';
+
 typedef ProgressCallback = void Function(double? fraction, String logLine);
 
 class FfmpegNotFoundException implements Exception {
@@ -29,7 +31,7 @@ class FfmpegService {
   static String? _ffmpegPath;
   static String? _ffprobePath;
 
-  static Future<String?> _findExecutable(String name) async {
+  static Future<String?> findExecutable(String name) async {
     final exeName = Platform.isWindows ? '$name.exe' : name;
 
     // 1. Check in same directory as application binary
@@ -64,6 +66,15 @@ class FfmpegService {
   }
 
   static Future<Directory> outputDirectory() async {
+    final custom = SettingsService.instance.customOutputDir;
+    if (custom != null && custom.trim().isNotEmpty) {
+      final dir = Directory(custom);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return dir;
+    }
+
     final docs = await getApplicationDocumentsDirectory();
     final dir = Directory('${docs.path}${Platform.pathSeparator}shitaka_memes_out');
     if (!await dir.exists()) {
@@ -86,7 +97,7 @@ class FfmpegService {
 
   static Future<String> ffmpegPath() async {
     if (_ffmpegPath != null) return _ffmpegPath!;
-    final found = await _findExecutable('ffmpeg');
+    final found = await findExecutable('ffmpeg');
     if (found == null) {
       throw FfmpegNotFoundException(
         'ffmpeg was not found on this system.\n\n'
@@ -99,7 +110,7 @@ class FfmpegService {
 
   static Future<String?> ffprobePath() async {
     if (_ffprobePath != null) return _ffprobePath;
-    _ffprobePath = await _findExecutable('ffprobe');
+    _ffprobePath = await findExecutable('ffprobe');
     return _ffprobePath;
   }
 
