@@ -73,6 +73,58 @@ img.Image generateCoolEmoji(int size) {
   return image;
 }
 
+List<int> encodeWin32Ico(List<img.Image> images) {
+  final entryCount = images.length;
+  final headerSize = 6 + (entryCount * 16);
+
+  final bytesBuilder = <int>[];
+  // 1. ICONDIR (6 bytes)
+  bytesBuilder.addAll([0x00, 0x00]); // Reserved
+  bytesBuilder.addAll([0x01, 0x00]); // Type 1 = ICO
+  bytesBuilder.addAll([entryCount & 0xFF, (entryCount >> 8) & 0xFF]); // Image count
+
+  final pngDataList = <List<int>>[];
+  int currentOffset = headerSize;
+
+  for (final image in images) {
+    final pngData = img.encodePng(image);
+    pngDataList.add(pngData);
+
+    final widthByte = image.width >= 256 ? 0 : image.width;
+    final heightByte = image.height >= 256 ? 0 : image.height;
+    final sizeInBytes = pngData.length;
+
+    // ICONDIRENTRY (16 bytes)
+    bytesBuilder.add(widthByte);
+    bytesBuilder.add(heightByte);
+    bytesBuilder.add(0); // Palette
+    bytesBuilder.add(0); // Reserved
+    bytesBuilder.addAll([0x01, 0x00]); // Color planes
+    bytesBuilder.addAll([0x20, 0x00]); // Bits per pixel (32)
+    bytesBuilder.addAll([
+      sizeInBytes & 0xFF,
+      (sizeInBytes >> 8) & 0xFF,
+      (sizeInBytes >> 16) & 0xFF,
+      (sizeInBytes >> 24) & 0xFF,
+    ]); // Size in bytes
+    bytesBuilder.addAll([
+      currentOffset & 0xFF,
+      (currentOffset >> 8) & 0xFF,
+      (currentOffset >> 16) & 0xFF,
+      (currentOffset >> 24) & 0xFF,
+    ]); // Offset
+
+    currentOffset += sizeInBytes;
+  }
+
+  // 2. Append PNG payloads
+  for (final pngData in pngDataList) {
+    bytesBuilder.addAll(pngData);
+  }
+
+  return bytesBuilder;
+}
+
 void main() {
   final sizes = {
     'mipmap-mdpi': 48,
@@ -93,15 +145,17 @@ void main() {
     File('${dir.path}/ic_launcher.png').writeAsBytesSync(png);
   }
 
-  // Generate Windows app_icon.ico
+  // Generate valid Win32 app_icon.ico for Windows
   final icoDir = Directory('windows/runner/resources');
   if (!icoDir.existsSync()) {
     icoDir.createSync(recursive: true);
   }
 
-  final icoImage = generateCoolEmoji(256);
-  final icoPng = img.encodePng(icoImage);
-  File('windows/runner/resources/app_icon.ico').writeAsBytesSync(icoPng);
+  final icoSizes = [16, 32, 48, 64, 128, 256];
+  final icoImages = icoSizes.map((sz) => generateCoolEmoji(sz)).toList();
+  final icoBytes = encodeWin32Ico(icoImages);
 
-  print('Generated Android and Windows Cool Sunglasses Emoji 😎 icons successfully!');
+  File('windows/runner/resources/app_icon.ico').writeAsBytesSync(icoBytes);
+
+  print('Generated Android and valid Win32 ICO Windows Cool Sunglasses Emoji 😎 icons successfully!');
 }
