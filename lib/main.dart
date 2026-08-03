@@ -125,7 +125,7 @@ Usage: shitaka_memes [options] <file1> [file2] ...
 Options:
   -t, --target <KB>     Target size in KB (default: 10)
   -m, --mute            Mute video audio (default: true)
-  -o, --output <dir>    Output directory (default: ~/Documents/shitaka_memes)
+  -o, --output <dir>    Output directory (default: ~/Documents/shitaka_memes_out)
   -h, --help            Show this help
 
 Examples:

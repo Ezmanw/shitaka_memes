@@ -46,3 +46,7 @@ app.*.map.json
 
 # Local release binaries (attached to GitHub Releases)
 /dist/release/
+
+# Temp output files
+SHIT-*
+THUMB-*

@@ -155,7 +155,7 @@ class _CompressScreenState extends State<CompressScreen> {
 
   Future<void> _openOutputFolder() async {
     final dir = await FfmpegService.outputDirectory();
-    await Process.start('xdg-open', [dir.path]);
+    await FfmpegService.openPath(dir.path);
   }
 
   @override

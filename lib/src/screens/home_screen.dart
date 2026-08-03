@@ -526,7 +526,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Shitaka repeatedly re-encodes each file, shrinking '
             'resolution and quality until it hits the target size, '
             'down to the double digits. Files land in '
-            '~/Documents/shitaka_memes and every job is logged in History.\n\n'
+            '~/Documents/shitaka_memes_out and every job is logged in History.\n\n'
             'Level 10 is irreversible. Your pixels will never recover.',
             style: TextStyle(height: 1.5),
           ),

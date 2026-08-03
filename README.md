@@ -126,9 +126,9 @@ A GitHub Actions workflow (`.github/workflows/release.yml`) builds **Linux, Wind
 
 ## 📂 Output Location
 
-- **Linux:** `~/Documents/shitaka_memes/`
-- **Windows:** App install directory
-- **macOS:** `~/Documents/shitaka_memes/`
+- **Linux:** `~/Documents/shitaka_memes_out/`
+- **Windows:** `Documents\shitaka_memes_out\`
+- **macOS:** `~/Documents/shitaka_memes_out/`
 
 ---
 

@@ -65,11 +65,23 @@ class FfmpegService {
 
   static Future<Directory> outputDirectory() async {
     final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory('${docs.path}${Platform.pathSeparator}shitaka_memes');
+    final dir = Directory('${docs.path}${Platform.pathSeparator}shitaka_memes_out');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
     return dir;
+  }
+
+  static Future<void> openPath(String path) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('explorer.exe', [path]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [path]);
+      } else {
+        await Process.run('xdg-open', [path]);
+      }
+    } catch (_) {}
   }
 
   static Future<String> ffmpegPath() async {

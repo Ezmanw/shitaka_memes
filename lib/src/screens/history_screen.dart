@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../models/compression_job.dart';
+import '../services/ffmpeg_service.dart';
 import '../services/history_store.dart';
 import '../services/size_formatter.dart';
 
@@ -18,7 +19,7 @@ class HistoryScreen extends StatelessWidget {
       }
       return;
     }
-    await Process.start('xdg-open', [path]);
+    await FfmpegService.openPath(path);
   }
 
   void _confirmClear(BuildContext context) {
