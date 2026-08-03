@@ -30,15 +30,32 @@ class FfmpegService {
   static String? _ffprobePath;
 
   static Future<String?> _findExecutable(String name) async {
-    final result = await Process.run('which', [name]);
-    if (result.exitCode == 0) {
-      final parts = (result.stdout as String)
-          .trim()
-          .split('\n')
-          .where((p) => p.isNotEmpty)
-          .toList();
-      if (parts.isNotEmpty) return parts.first;
-    }
+    final exeName = Platform.isWindows ? '$name.exe' : name;
+
+    // 1. Check in same directory as application binary
+    try {
+      final appDir = File(Platform.resolvedExecutable).parent;
+      final localExe = File('${appDir.path}${Platform.pathSeparator}$exeName');
+      if (await localExe.exists()) {
+        return localExe.path;
+      }
+    } catch (_) {}
+
+    // 2. Check system PATH using OS-appropriate lookup tool
+    try {
+      final command = Platform.isWindows ? 'where.exe' : 'which';
+      final result = await Process.run(command, [exeName]);
+      if (result.exitCode == 0) {
+        final parts = (result.stdout as String)
+            .trim()
+            .split('\n')
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList();
+        if (parts.isNotEmpty) return parts.first;
+      }
+    } catch (_) {}
+
     return null;
   }
 
@@ -61,8 +78,7 @@ class FfmpegService {
     if (found == null) {
       throw FfmpegNotFoundException(
         'ffmpeg was not found on this system.\n\n'
-        'Install it with:\n  sudo apt install ffmpeg\n\n'
-        'and restart the app.',
+        'Please ensure ffmpeg is installed in system PATH or placed in the application folder.',
       );
     }
     _ffmpegPath = found;
