@@ -358,25 +358,30 @@ class FfmpegService {
 
         final inputSize = File(input).existsSync() ? File(input).lengthSync() : 0;
 
-        // 1. Primary Engine: LightCompressor (Android native MediaCodec)
+        // 1. Primary Engine: LightCompressor (Android native MediaCodec with explicit resolution downscaling)
         try {
           final lightCompressor = lc.LightCompressor();
-          final quality = targetBytes < 1024 * 1024
-              ? lc.VideoQuality.very_low
-              : (targetBytes < 5 * 1024 * 1024
-                  ? lc.VideoQuality.low
-                  : lc.VideoQuality.medium);
 
-          // Calculate target megabytes for LightCompressor
-          int targetMb = (targetBytes / (1000 * 1000)).floor();
-          if (targetMb < 1) targetMb = 1;
+          lc.VideoQuality quality;
+          int w;
+          int h;
 
-          // If input is larger than targetMb, force targetMb to be smaller than original
-          if (inputSize > 0) {
-            final inputMb = (inputSize / (1000 * 1000)).floor();
-            if (targetMb >= inputMb && inputMb > 1) {
-              targetMb = (inputMb * 0.6).floor().clamp(1, inputMb - 1);
-            }
+          if (targetBytes < 2 * 1024 * 1024) {
+            quality = lc.VideoQuality.very_low;
+            w = 480;
+            h = 270;
+          } else if (targetBytes < 8 * 1024 * 1024) {
+            quality = lc.VideoQuality.low;
+            w = 640;
+            h = 360;
+          } else if (targetBytes < 25 * 1024 * 1024) {
+            quality = lc.VideoQuality.medium;
+            w = 960;
+            h = 540;
+          } else {
+            quality = lc.VideoQuality.high;
+            w = 1280;
+            h = 720;
           }
 
           final response = await lightCompressor.compressVideo(
@@ -386,8 +391,8 @@ class FfmpegService {
             ios: lc.IOSConfig(saveInGallery: false),
             video: lc.Video(
               videoName: 'SHIT_${DateTime.now().millisecondsSinceEpoch}.mp4',
-              targetSizeMb: targetMb,
-              twoPass: true,
+              videoWidth: w,
+              videoHeight: h,
             ),
             isMinBitrateCheckEnabled: false,
             disableAudio: mute,
@@ -399,7 +404,7 @@ class FfmpegService {
               final compressedFile = File(dest);
               final compSize = compressedFile.lengthSync();
 
-              if (compSize > 0) {
+              if (compSize > 0 && (inputSize == 0 || compSize < inputSize)) {
                 final outFile = File(output);
                 await outFile.parent.create(recursive: true);
                 await compressedFile.copy(output);
@@ -427,14 +432,12 @@ class FfmpegService {
           }
         } catch (_) {}
 
-        // 2. Secondary Engine: VideoCompress
+        // 2. Secondary Engine: VideoCompress (Native MediaCodec 480p/540p)
         vc.MediaInfo? info;
         try {
-          final vcQuality = targetBytes < 2 * 1024 * 1024
+          final vcQuality = targetBytes < 5 * 1024 * 1024
               ? vc.VideoQuality.LowQuality
-              : (targetBytes < 10 * 1024 * 1024
-                  ? vc.VideoQuality.MediumQuality
-                  : vc.VideoQuality.Res960x540Quality);
+              : vc.VideoQuality.MediumQuality;
 
           info = await vc.VideoCompress.compressVideo(
             input,
@@ -454,12 +457,13 @@ class FfmpegService {
         }
 
         if (sourceFile != null && sourceFile.existsSync()) {
-          final outFile = File(output);
-          await outFile.parent.create(recursive: true);
-          await sourceFile.copy(output);
-          final size = await _fileSize(output);
+          final compSize = sourceFile.lengthSync();
+          if (compSize > 0 && (inputSize == 0 || compSize < inputSize)) {
+            final outFile = File(output);
+            await outFile.parent.create(recursive: true);
+            await sourceFile.copy(output);
+            final size = await _fileSize(output);
 
-          if (size > 0) {
             String? thumb;
             if (thumbnailOut != null) {
               try {
