@@ -141,6 +141,7 @@ class FfmpegService {
   }
 
   static Future<String> ffmpegPath() async {
+    if (Platform.isAndroid) return 'ffmpeg';
     if (_ffmpegPath != null) return _ffmpegPath!;
     final found = await findExecutable('ffmpeg');
     if (found == null) {

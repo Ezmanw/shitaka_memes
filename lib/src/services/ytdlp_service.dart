@@ -17,6 +17,7 @@ class YtdlpService {
   static String? _ytdlpPath;
 
   static Future<String> ytdlpPath() async {
+    if (Platform.isAndroid) return 'yt-dlp';
     if (_ytdlpPath != null) return _ytdlpPath!;
     final found = await FfmpegService.findExecutable('yt-dlp');
     if (found == null) {
