@@ -10,16 +10,63 @@ import '../services/size_formatter.dart';
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
-  Future<void> _openFile(BuildContext context, String? path) async {
-    if (path == null || !await File(path).exists()) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('The file is no longer there.')),
-        );
-      }
+  void _openFile(BuildContext context, String? path, String fileName) {
+    if (path == null || !File(path).existsSync()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File does not exist on disk.')),
+      );
       return;
     }
-    await FfmpegService.openPath(path);
+
+    final file = File(path);
+    final sizeStr = formatBytes(file.lengthSync());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.image),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                fileName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                file,
+                maxHeight: 300,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: Icon(Icons.broken_image, size: 48)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SelectableText(
+              'Location: $path\nSize: $sizeStr',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmClear(BuildContext context) {
@@ -131,7 +178,7 @@ class HistoryScreen extends StatelessWidget {
     return Card(
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        onTap: () => _openFile(context, job.outputPath),
+        onTap: () => _openFile(context, job.outputPath, job.fileName),
         leading: Container(
           width: 44,
           height: 44,

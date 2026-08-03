@@ -155,7 +155,144 @@ class _CompressScreenState extends State<CompressScreen> {
 
   Future<void> _openOutputFolder() async {
     final dir = await FfmpegService.outputDirectory();
-    await FfmpegService.openPath(dir.path);
+    if (Platform.isAndroid || (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux)) {
+      await _showOutputFolderModal(context, dir);
+    } else {
+      await FfmpegService.openPath(dir.path);
+    }
+  }
+
+  void _showImagePreviewDialog(BuildContext context, String filePath, String fileName) {
+    final file = File(filePath);
+    final exists = file.existsSync();
+    final sizeStr = exists ? formatBytes(file.lengthSync()) : 'Unknown size';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.image),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                fileName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (exists)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  file,
+                  maxHeight: 300,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: Icon(Icons.broken_image, size: 48)),
+                  ),
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('File does not exist on disk.'),
+              ),
+            const SizedBox(height: 12),
+            SelectableText(
+              'Location: $filePath\nSize: $sizeStr',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showOutputFolderModal(BuildContext context, Directory dir) async {
+    final files = dir.existsSync() ? dir.listSync().whereType<File>().toList() : <File>[];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.folder),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Output Folder (${files.length} files)',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ],
+            ),
+            SelectableText(
+              dir.path,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const Divider(height: 24),
+            if (files.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: Text('No compressed files found.')),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  itemCount: files.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final file = files[i];
+                    final name = file.path.split(Platform.pathSeparator).last;
+                    final isImg = RegExp(r'\.(jpg|jpeg|png|webp|gif)$', caseSensitive: false).hasMatch(name);
+                    return ListTile(
+                      leading: Icon(isImg ? Icons.image : Icons.movie),
+                      title: Text(name),
+                      subtitle: Text(formatBytes(file.lengthSync())),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _showImagePreviewDialog(context, file.path, name);
+                      },
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -366,8 +503,17 @@ class _CompressScreenState extends State<CompressScreen> {
     };
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: state.job?.outputPath != null
+            ? () => _showImagePreviewDialog(
+                  context,
+                  state.job!.outputPath!,
+                  item.name,
+                )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

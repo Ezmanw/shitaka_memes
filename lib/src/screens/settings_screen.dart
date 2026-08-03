@@ -1,3 +1,4 @@
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../services/ffmpeg_service.dart';
@@ -181,24 +182,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: _dirController,
-                        decoration: InputDecoration(
-                          hintText: 'e.g. C:\\CompressedMemes or ~/Documents/shitaka_memes_out',
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.save),
-                            onPressed: () {
-                              SettingsService.instance.setCustomOutputDir(
-                                _dirController.text,
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Output location updated!'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _dirController,
+                              decoration: InputDecoration(
+                                hintText: 'e.g. /storage/emulated/0/Download or C:\\Memes',
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.save),
+                                  onPressed: () {
+                                    SettingsService.instance.setCustomOutputDir(
+                                      _dirController.text,
+                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Output location updated!'),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            icon: const Icon(Icons.folder_open),
+                            label: const Text('Browse'),
+                            onPressed: () async {
+                              try {
+                                final path = await getDirectoryPath();
+                                if (path != null && path.isNotEmpty) {
+                                  setState(() {
+                                    _dirController.text = path;
+                                  });
+                                  await SettingsService.instance.setCustomOutputDir(path);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Output set: $path')),
+                                    );
+                                  }
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Error: $e')),
+                                  );
+                                }
+                              }
                             },
                           ),
-                        ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Row(
