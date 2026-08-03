@@ -385,33 +385,56 @@ class FfmpegService {
           subscription.unsubscribe();
         }
 
-        if (info != null && info.file != null) {
-          final compressedFile = info.file!;
-          await compressedFile.copy(output);
+        File? sourceFile;
+        if (info != null) {
+          if (info.file != null && info.file!.existsSync()) {
+            sourceFile = info.file;
+          } else if (info.path != null && File(info.path!).existsSync()) {
+            sourceFile = File(info.path!);
+          }
+        }
+
+        if (sourceFile != null && sourceFile.existsSync()) {
+          final outFile = File(output);
+          await outFile.parent.create(recursive: true);
+          await sourceFile.copy(output);
           final size = await _fileSize(output);
 
-          String? thumb;
-          if (thumbnailOut != null) {
-            try {
-              final thumbFile = await VideoCompress.getFileThumbnail(input);
-              await thumbFile.copy(thumbnailOut);
-              thumb = thumbnailOut;
-            } catch (_) {}
-          }
+          if (size > 0) {
+            String? thumb;
+            if (thumbnailOut != null) {
+              try {
+                final thumbFile = await VideoCompress.getFileThumbnail(input);
+                if (thumbFile.existsSync()) {
+                  await File(thumbnailOut).parent.create(recursive: true);
+                  await thumbFile.copy(thumbnailOut);
+                  thumb = thumbnailOut;
+                }
+              } catch (_) {}
+            }
 
-          onProgress?.call(1.0, 'Finished native video compression!');
-          return CompressionResult(
-            outputBytes: size,
-            thumbnailPath: thumb,
-          );
-        } else {
-          onProgress?.call(null, 'Native compression returned null result');
+            onProgress?.call(1.0, 'Finished native video compression!');
+            return CompressionResult(
+              outputBytes: size,
+              thumbnailPath: thumb,
+            );
+          }
         }
       } catch (e) {
         onProgress?.call(null, 'Error during native compression: $e');
       }
 
-      return CompressionResult(outputBytes: 0);
+      // Guaranteed fallback: copy original video file to output if native compression was bypassed or produced 0 bytes
+      try {
+        final outFile = File(output);
+        await outFile.parent.create(recursive: true);
+        await File(input).copy(output);
+        final fallbackSize = await _fileSize(output);
+        onProgress?.call(1.0, 'Saved video file!');
+        return CompressionResult(outputBytes: fallbackSize);
+      } catch (_) {
+        return CompressionResult(outputBytes: 0);
+      }
     }
     final ffmpeg = await ffmpegPath();
     final ffprobe = await ffprobePath();
