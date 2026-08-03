@@ -1,5 +1,5 @@
 #define MyAppName "shitaka_memes"
-#define MyAppVersion "1.1.2"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "Ezmanw"
 #define MyAppURL "https://github.com/Ezmanw/shitaka_memes"
 #define MyAppExeName "shitaka_memes.exe"
