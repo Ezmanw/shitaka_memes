@@ -355,20 +355,39 @@ class FfmpegService {
       try {
         onProgress?.call(null, 'Assaulting video frames natively...');
 
+        final subscription = VideoCompress.compressProgress$.subscribe((progress) {
+          onProgress?.call(progress / 100.0, 'Compressing video natively: ${progress.toInt()}%');
+        });
+
         final quality = targetBytes < 500 * 1024
             ? VideoQuality.LowQuality
             : (targetBytes < 2 * 1024 * 1024
                 ? VideoQuality.MediumQuality
                 : VideoQuality.DefaultQuality);
 
-        final info = await VideoCompress.compressVideo(
-          input,
-          quality: quality,
-          deleteOrigin: false,
-        );
+        MediaInfo? info;
+        try {
+          info = await VideoCompress.compressVideo(
+            input,
+            quality: quality,
+            deleteOrigin: false,
+            includeAudio: !mute,
+            frameRate: 24,
+          );
+        } catch (_) {
+          info = await VideoCompress.compressVideo(
+            input,
+            quality: VideoQuality.LowQuality,
+            deleteOrigin: false,
+            includeAudio: !mute,
+          );
+        } finally {
+          subscription.unsubscribe();
+        }
 
         if (info != null && info.file != null) {
-          await info.file!.copy(output);
+          final compressedFile = info.file!;
+          await compressedFile.copy(output);
           final size = await _fileSize(output);
 
           String? thumb;
@@ -385,17 +404,14 @@ class FfmpegService {
             outputBytes: size,
             thumbnailPath: thumb,
           );
+        } else {
+          onProgress?.call(null, 'Native compression returned null result');
         }
       } catch (e) {
         onProgress?.call(null, 'Error during native compression: $e');
       }
 
-      try {
-        await File(input).copy(output);
-        return CompressionResult(outputBytes: await _fileSize(output));
-      } catch (_) {
-        return CompressionResult(outputBytes: 0);
-      }
+      return CompressionResult(outputBytes: 0);
     }
     final ffmpeg = await ffmpegPath();
     final ffprobe = await ffprobePath();
