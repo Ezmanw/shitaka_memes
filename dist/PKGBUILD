@@ -1,0 +1,30 @@
+# Maintainer: Ezmanw <https://github.com/Ezmanw>
+# Contributed binary package. Source builds are provided upstream:
+# https://github.com/Ezmanw/shitaka_memes
+
+pkgname=shitaka-memes
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Compress the SHIT out of your images and videos. Native Material 3 app powered by FFmpeg"
+arch=('x86_64')
+url="https://github.com/Ezmanw/shitaka_memes"
+license=('MIT')
+depends=('gtk3' 'ffmpeg' 'xdg-utils' 'lz4')
+options=('!strip')
+source=("${pkgname}-${pkgver}-src-linux-x64.tar.gz")
+sha256sums=('6ae18a71a5b9483c7a67d21b8f38e49b944dc4e614a9f7a1963fc99e8fa12b45')
+
+package() {
+  local target="${pkgdir}/usr/lib/shitaka-memes"
+  install -dm755 "${target}"
+  cp -a "${srcdir}/shitaka_memes" "${srcdir}/lib" "${srcdir}/data" "${target}/"
+
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -sf ../lib/shitaka-memes/shitaka_memes "${pkgdir}/usr/bin/shitaka-memes"
+
+  install -Dm644 "${srcdir}/com.shitaka.shitaka_memes.desktop" \
+    "${pkgdir}/usr/share/applications/com.shitaka.shitaka_memes.desktop"
+
+  install -Dm644 "${srcdir}/com.shitaka.shitaka_memes.png" \
+    "${pkgdir}/usr/share/pixmaps/com.shitaka.shitaka_memes.png"
+}

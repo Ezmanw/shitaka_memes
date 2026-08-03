@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Shitaka Memes
+GenericName=Meme Compressor
+Comment=Compress the SHIT out of your images and videos
+Exec=shitaka-memes
+Icon=com.shitaka.shitaka_memes
+Terminal=false
+Categories=Graphics;AudioVideo;Utility;
+Keywords=compress;meme;ffmpeg;image;video;shitpost;
+StartupNotify=true
+StartupWMClass=shitaka_memes
