@@ -3,8 +3,9 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:image/image.dart' as img;
+import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
 import 'package:path_provider/path_provider.dart';
-import 'package:video_compress/video_compress.dart';
+import 'package:video_compress/video_compress.dart' as vc;
 
 import 'settings_service.dart';
 
@@ -355,35 +356,68 @@ class FfmpegService {
       try {
         onProgress?.call(null, 'Assaulting video frames natively...');
 
-        final subscription = VideoCompress.compressProgress$.subscribe((progress) {
-          onProgress?.call(progress / 100.0, 'Compressing video natively: ${progress.toInt()}%');
-        });
-
-        final quality = targetBytes < 500 * 1024
-            ? VideoQuality.LowQuality
-            : (targetBytes < 2 * 1024 * 1024
-                ? VideoQuality.MediumQuality
-                : VideoQuality.DefaultQuality);
-
-        MediaInfo? info;
+        // 1. Primary Engine: LightCompressor (Android native MediaCodec)
         try {
-          info = await VideoCompress.compressVideo(
+          final lightCompressor = lc.LightCompressor();
+          final quality = targetBytes < 1024 * 1024
+              ? lc.VideoQuality.very_low
+              : (targetBytes < 5 * 1024 * 1024
+                  ? lc.VideoQuality.low
+                  : lc.VideoQuality.medium);
+
+          final response = await lightCompressor.compressVideo(
+            path: input,
+            videoQuality: quality,
+            android: lc.AndroidConfig(isSharedStorage: false),
+            ios: lc.IOSConfig(saveInGallery: false),
+            video: lc.Video(
+              videoName: 'SHIT_${DateTime.now().millisecondsSinceEpoch}.mp4',
+            ),
+            isMinBitrateCheckEnabled: false,
+            disableAudio: mute,
+          );
+
+          if (response is lc.OnSuccess) {
+            final dest = response.destinationPath;
+            if (dest.isNotEmpty && File(dest).existsSync()) {
+              final outFile = File(output);
+              await outFile.parent.create(recursive: true);
+              await File(dest).copy(output);
+              final size = await _fileSize(output);
+
+              if (size > 0) {
+                String? thumb;
+                if (thumbnailOut != null) {
+                  try {
+                    final thumbFile = await vc.VideoCompress.getFileThumbnail(input);
+                    if (thumbFile.existsSync()) {
+                      await File(thumbnailOut).parent.create(recursive: true);
+                      await thumbFile.copy(thumbnailOut);
+                      thumb = thumbnailOut;
+                    }
+                  } catch (_) {}
+                }
+
+                onProgress?.call(1.0, 'Finished native video compression!');
+                return CompressionResult(
+                  outputBytes: size,
+                  thumbnailPath: thumb,
+                );
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Secondary Engine: VideoCompress
+        vc.MediaInfo? info;
+        try {
+          info = await vc.VideoCompress.compressVideo(
             input,
-            quality: quality,
+            quality: vc.VideoQuality.LowQuality,
             deleteOrigin: false,
             includeAudio: !mute,
-            frameRate: 24,
           );
-        } catch (_) {
-          info = await VideoCompress.compressVideo(
-            input,
-            quality: VideoQuality.LowQuality,
-            deleteOrigin: false,
-            includeAudio: !mute,
-          );
-        } finally {
-          subscription.unsubscribe();
-        }
+        } catch (_) {}
 
         File? sourceFile;
         if (info != null) {
@@ -404,7 +438,7 @@ class FfmpegService {
             String? thumb;
             if (thumbnailOut != null) {
               try {
-                final thumbFile = await VideoCompress.getFileThumbnail(input);
+                final thumbFile = await vc.VideoCompress.getFileThumbnail(input);
                 if (thumbFile.existsSync()) {
                   await File(thumbnailOut).parent.create(recursive: true);
                   await thumbFile.copy(thumbnailOut);
