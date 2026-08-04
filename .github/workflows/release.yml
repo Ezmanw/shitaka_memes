@@ -64,10 +64,53 @@ jobs:
             find /flutter /root/.pub-cache -name "CMakeLists.txt" -exec sed -i 's/FATAL_ERROR "ffmpeg_kit_flutter: Linux is x86_64-only/STATUS "ffmpeg_kit_flutter: Linux arm64 stub/g' {} + || true
             flutter build linux --release
 
-      - name: Fix build directory permissions
-        run: sudo chown -R $USER:$USER build || true
+            BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
+            if [ -d "$BUNDLE_DIR" ]; then
+              APPDIR="build/AppDir"
+              mkdir -p $APPDIR/usr/bin $APPDIR/usr/lib/shitaka_memes $APPDIR/usr/share/applications || true
+              cp -r $BUNDLE_DIR/* $APPDIR/usr/lib/shitaka_memes/ || true
+              ln -sf /usr/lib/shitaka_memes/shitaka_memes $APPDIR/usr/bin/shitaka_memes || true
+              cp dist/icons/com.shitaka.shitaka_memes_256.png $APPDIR/shitaka-memes.png || true
 
-      - name: Package Tarball & Include install.sh
+              printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "${0}")")"\nexport PATH="${HERE}/usr/bin:${PATH}"\nexport LD_LIBRARY_PATH="${HERE}/usr/lib/shitaka_memes:${LD_LIBRARY_PATH}"\nexec "${HERE}/usr/lib/shitaka_memes/shitaka_memes" "$@"\n' > $APPDIR/AppRun
+              chmod +x $APPDIR/AppRun
+
+              printf '[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;AudioVideo;\n' > $APPDIR/shitaka-memes.desktop
+
+              wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage -O appimagetool
+              chmod +x appimagetool
+              ./appimagetool --appimage-extract
+              ARCH=aarch64 ./squashfs-root/AppRun $APPDIR shitaka-memes-linux-arm64.AppImage
+
+              DEB_DIR="build/deb_pkg"
+              mkdir -p $DEB_DIR/DEBIAN $DEB_DIR/usr/lib/shitaka_memes $DEB_DIR/usr/bin $DEB_DIR/usr/share/applications
+              cp -r $BUNDLE_DIR/* $DEB_DIR/usr/lib/shitaka_memes/ || true
+              ln -sf /usr/lib/shitaka_memes/shitaka_memes $DEB_DIR/usr/bin/shitaka_memes || true
+              printf "Package: shitaka-memes\nVersion: 1.2.0\nSection: utils\nPriority: optional\nArchitecture: arm64\nMaintainer: Ethan <shitaka@example.com>\nDescription: High-speed cross-platform meme compression utility.\n" > $DEB_DIR/DEBIAN/control
+              printf "[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=/usr/bin/shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;AudioVideo;\n" > $DEB_DIR/usr/share/applications/shitaka-memes.desktop
+              dpkg-deb --build $DEB_DIR shitaka-memes-linux-arm64.deb || true
+
+              if [ -f shitaka-memes-linux-arm64.deb ]; then
+                alien -r -k shitaka-memes-linux-arm64.deb || true
+                mv *.rpm shitaka-memes-linux-arm64.rpm || true
+              fi
+
+              ARCH_DIR="build/arch_pkg"
+              mkdir -p $ARCH_DIR/usr/bin $ARCH_DIR/usr/lib/shitaka_memes
+              cp -r $BUNDLE_DIR/* $ARCH_DIR/usr/lib/shitaka_memes/ || true
+              ln -sf /usr/lib/shitaka_memes/shitaka_memes $ARCH_DIR/usr/bin/shitaka_memes || true
+              tar -C $ARCH_DIR -I 'zstd' -cf shitaka-memes-linux-arm64.pkg.tar.zst . || true
+
+              cp tool/install.sh $BUNDLE_DIR/install.sh || true
+              chmod +x $BUNDLE_DIR/install.sh || true
+              tar -C $BUNDLE_DIR -czf shitaka-memes-linux-arm64.tar.gz . || true
+            fi
+
+      - name: Fix build directory and workspace permissions
+        run: sudo chown -R $USER:$USER build *.deb *.rpm *.AppImage *.pkg.tar.zst *.tar.gz || true
+
+      - name: Package Tarball & Include install.sh (x64)
+        if: matrix.arch == 'x64'
         run: |
           BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
@@ -76,7 +119,8 @@ jobs:
             tar -C $BUNDLE_DIR -czf shitaka-memes-linux-${{ matrix.arch }}.tar.gz . || true
           fi
 
-      - name: Build AppImage Package
+      - name: Build AppImage Package (x64)
+        if: matrix.arch == 'x64'
         run: |
           BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
@@ -105,7 +149,8 @@ jobs:
             fi
           fi
 
-      - name: Build .deb Debian Package
+      - name: Build .deb Debian Package (x64)
+        if: matrix.arch == 'x64'
         run: |
           BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
@@ -121,14 +166,16 @@ jobs:
             dpkg-deb --build $DEB_DIR shitaka-memes-linux-${{ matrix.arch }}.deb || true
           fi
 
-      - name: Build .rpm Package
+      - name: Build .rpm Package (x64)
+        if: matrix.arch == 'x64'
         run: |
           if [ -f shitaka-memes-linux-${{ matrix.arch }}.deb ]; then
             alien -r -k shitaka-memes-linux-${{ matrix.arch }}.deb || true
             mv *.rpm shitaka-memes-linux-${{ matrix.arch }}.rpm || true
           fi
 
-      - name: Build Arch Linux package (.pkg.tar.zst)
+      - name: Build Arch Linux package (.pkg.tar.zst) (x64)
+        if: matrix.arch == 'x64'
         run: |
           BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
