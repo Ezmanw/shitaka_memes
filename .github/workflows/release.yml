@@ -98,26 +98,9 @@ jobs:
             cp -r $BUNDLE_DIR/* $DEB_DIR/usr/lib/shitaka_memes/ || true
             ln -sf /usr/lib/shitaka_memes/shitaka_memes $DEB_DIR/usr/bin/shitaka_memes || true
 
-            cat <<'EOF' > $DEB_DIR/DEBIAN/control
-Package: shitaka-memes
-Version: 1.2.0
-Section: utils
-Priority: optional
-Architecture: ${{ matrix.deb_arch }}
-Maintainer: Ethan <shitaka@example.com>
-Description: High-speed cross-platform meme compression utility.
-EOF
+            printf "Package: shitaka-memes\nVersion: 1.2.0\nSection: utils\nPriority: optional\nArchitecture: %s\nMaintainer: Ethan <shitaka@example.com>\nDescription: High-speed cross-platform meme compression utility.\n" "${{ matrix.deb_arch }}" > $DEB_DIR/DEBIAN/control
 
-            cat <<'EOF' > $DEB_DIR/usr/share/applications/shitaka-memes.desktop
-[Desktop Entry]
-Name=Shitaka Memes
-Comment=High-speed cross-platform meme compression utility
-Exec=/usr/bin/shitaka_memes
-Icon=shitaka-memes
-Terminal=false
-Type=Application
-Categories=Utility;Multimedia;
-EOF
+            printf "[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=/usr/bin/shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;Multimedia;\n" > $DEB_DIR/usr/share/applications/shitaka-memes.desktop
 
             dpkg-deb --build $DEB_DIR shitaka-memes-linux-${{ matrix.arch }}.deb || true
           fi
