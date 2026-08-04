@@ -89,7 +89,7 @@ jobs:
             printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "${0}")")"\nexport PATH="${HERE}/usr/bin:${PATH}"\nexport LD_LIBRARY_PATH="${HERE}/usr/lib/shitaka_memes:${LD_LIBRARY_PATH}"\nexec "${HERE}/usr/lib/shitaka_memes/shitaka_memes" "$@"\n' > $APPDIR/AppRun
             chmod +x $APPDIR/AppRun
 
-            printf '[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;Multimedia;\n' > $APPDIR/shitaka-memes.desktop
+            printf '[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;AudioVideo;\n' > $APPDIR/shitaka-memes.desktop
 
             if [ "${{ matrix.arch }}" = "arm64" ]; then
               wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-aarch64.AppImage -O appimagetool
@@ -115,7 +115,7 @@ jobs:
 
             printf "Package: shitaka-memes\nVersion: 1.2.0\nSection: utils\nPriority: optional\nArchitecture: %s\nMaintainer: Ethan <shitaka@example.com>\nDescription: High-speed cross-platform meme compression utility.\n" "${{ matrix.deb_arch }}" > $DEB_DIR/DEBIAN/control
 
-            printf "[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=/usr/bin/shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;Multimedia;\n" > $DEB_DIR/usr/share/applications/shitaka-memes.desktop
+            printf "[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=/usr/bin/shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;AudioVideo;\n" > $DEB_DIR/usr/share/applications/shitaka-memes.desktop
 
             dpkg-deb --build $DEB_DIR shitaka-memes-linux-${{ matrix.arch }}.deb || true
           fi
