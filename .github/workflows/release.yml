@@ -65,24 +65,18 @@ jobs:
           sudo apt-get update && sudo apt-get install -y \
             clang cmake ninja-build libgtk-3-dev dpkg-dev rpm alien zstd || true
       - run: flutter pub get
-      - name: Build Flutter Linux app (x64)
-        if: matrix.arch == 'x64'
-        run: flutter build linux --release
-
-      - name: Build Flutter Linux app (arm64 native inside Docker container)
-        if: matrix.arch == 'arm64'
+      - name: Build Flutter Linux app
         run: |
-          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-          docker run --rm -v ${{ github.workspace }}:/app -w /app arm64v8/ubuntu:22.04 bash -c "
-            apt-get update && apt-get install -y clang cmake ninja-build libgtk-3-dev curl git unzip dpkg-dev rpm alien zstd wget
-            curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.0-stable.tar.xz
-            tar -xf flutter_linux_3.29.0-stable.tar.xz
-            export PATH=\"\$PWD/flutter/bin:\$PATH\"
-            export CFLAGS=\"-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57\"
-            export CXXFLAGS=\"-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57\"
-            flutter pub get
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu || true
+            export CC=aarch64-linux-gnu-gcc
+            export CXX=aarch64-linux-gnu-g++
+            export CFLAGS="-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57"
+            export CXXFLAGS="-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57"
+            flutter build linux --release --target-platform linux-arm64
+          else
             flutter build linux --release
-          "
+          fi
 
       - name: Package Tarball & Include install.sh
         run: |
@@ -109,7 +103,8 @@ jobs:
 
             wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -O appimagetool || true
             chmod +x appimagetool || true
-            ./appimagetool --appimage-extract-and-run $APPDIR shitaka-memes-linux-${{ matrix.arch }}.AppImage || true
+            ./appimagetool --appimage-extract || true
+            ./squashfs-root/AppRun $APPDIR shitaka-memes-linux-${{ matrix.arch }}.AppImage || true
           fi
 
       - name: Build .deb Debian Package
