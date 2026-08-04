@@ -69,6 +69,10 @@ jobs:
         if: matrix.arch == 'x64'
         run: flutter build linux --release
 
+      - name: Set up QEMU for ARM64 emulation
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+
       - name: Build Flutter Linux app (arm64 native inside QEMU container)
         if: matrix.arch == 'arm64'
         uses: uraimo/run-on-arch-action@v2
