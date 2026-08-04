@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
 import 'package:image/image.dart' as img;
 import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
 import 'package:path_provider/path_provider.dart';
@@ -355,6 +357,67 @@ class FfmpegService {
     if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
       try {
         onProgress?.call(null, 'Assaulting video frames natively...');
+
+        // 0. Primary Android Engine: FFmpegKit (Full native FFmpeg libx264 engine)
+        if (Platform.isAndroid) {
+          try {
+            onProgress?.call(null, 'Encoding video with FFmpeg engine...');
+
+            final target = targetBytes;
+            int scale = 640;
+            int fps = 24;
+            int crf = 30;
+
+            if (target < 2 * 1024 * 1024) {
+              scale = 480;
+              fps = 20;
+              crf = 34;
+            } else if (target < 8 * 1024 * 1024) {
+              scale = 640;
+              fps = 24;
+              crf = 30;
+            } else if (target < 25 * 1024 * 1024) {
+              scale = 854;
+              fps = 24;
+              crf = 28;
+            } else {
+              scale = 1280;
+              fps = 30;
+              crf = 24;
+            }
+
+            final audioArg = mute ? '-an' : '-c:a aac -b:a 96k';
+            final cmd = '-y -i "$input" -vf "scale=w=\'min(iw,$scale)\':h=-2,fps=$fps" -c:v libx264 -crf $crf -preset ultrafast $audioArg "$output"';
+
+            final session = await FFmpegKit.execute(cmd);
+            final returnCode = await session.getReturnCode();
+
+            if (ReturnCode.isSuccess(returnCode)) {
+              final size = await _fileSize(output);
+              if (size > 0) {
+                String? thumb;
+                if (thumbnailOut != null) {
+                  try {
+                    final thumbCmd = '-y -ss 00:00:01 -i "$input" -vframes 1 "$thumbnailOut"';
+                    await FFmpegKit.execute(thumbCmd);
+                    if (File(thumbnailOut).existsSync()) {
+                      thumb = thumbnailOut;
+                    }
+                  } catch (_) {}
+                }
+
+                onProgress?.call(1.0, 'Finished FFmpeg video compression!');
+                return CompressionResult(
+                  outputBytes: size,
+                  thumbnailPath: thumb,
+                  outputPath: output,
+                );
+              }
+            }
+          } catch (e) {
+            onProgress?.call(null, 'FFmpegKit failed, falling back to MediaCodec: $e');
+          }
+        }
 
         // 1. Primary Engine: LightCompressor (Android native MediaCodec with auto-orientation)
         try {

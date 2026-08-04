@@ -5,6 +5,7 @@
 import FlutterMacOS
 import Foundation
 
+import ffmpeg_kit_flutter_min_gpl
 import file_selector_macos
 import light_compressor_v2
 import path_provider_foundation
@@ -12,6 +13,7 @@ import shared_preferences_foundation
 import video_compress
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
+  FFmpegKitFlutterPlugin.register(with: registry.registrar(forPlugin: "FFmpegKitFlutterPlugin"))
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
   LightCompressorPlugin.register(with: registry.registrar(forPlugin: "LightCompressorPlugin"))
   PathProviderPlugin.register(with: registry.registrar(forPlugin: "PathProviderPlugin"))
