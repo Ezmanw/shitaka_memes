@@ -368,18 +368,36 @@ class FfmpegService {
         try {
           onProgress?.call(0.1, 'Running native C/C++ FFmpeg engine...');
           final origSize = tempInputFile.lengthSync();
-          final targetKbits = (targetBytes * 8 / 1024).round();
-          final targetBitrateKbps = (targetKbits / 10).clamp(100, 1500).round();
+          final scaleFilter = targetBytes < 4 * 1024 * 1024 ? 'scale=360:-2' : 'scale=480:-2';
+          final crfVal = targetBytes < 2 * 1024 * 1024 ? 38 : 32;
 
-          final command = '-y -i "$workPath" -vf "scale=iw*min(1\\,480/iw):-2" -c:v libx264 -crf 32 -preset ultrafast -b:v ${targetBitrateKbps}k ${mute ? "-an" : "-c:a aac -b:a 64k"} "$output"';
+          final command = '-y -i "$workPath" -vf $scaleFilter -c:v libx264 -crf $crfVal -preset ultrafast ${mute ? "-an" : "-c:a aac -b:a 64k"} "$output"';
 
-          final session = await FFmpegKit.execute(command);
-          final returnCode = await session.getReturnCode();
+          var session = await FFmpegKit.execute(command);
+          var returnCode = await session.getReturnCode();
+
+          if (ReturnCode.isSuccess(returnCode)) {
+            var size = await _fileSize(output);
+            if (size > 0 && size < origSize) {
+              onProgress?.call(1.0, 'Finished native FFmpeg compression!');
+              try { await tempInputFile.delete(); } catch (_) {}
+              return CompressionResult(
+                outputBytes: size,
+                outputPath: output,
+              );
+            }
+          }
+
+          // Aggressive Pass 2: Force 240p downscale if Pass 1 wasn't small enough
+          onProgress?.call(0.5, 'Running aggressive low-bitrate pass...');
+          final aggressiveCmd = '-y -i "$workPath" -vf scale=240:-2 -c:v libx264 -crf 42 -preset ultrafast ${mute ? "-an" : "-c:a aac -b:a 48k"} "$output"';
+          session = await FFmpegKit.execute(aggressiveCmd);
+          returnCode = await session.getReturnCode();
 
           if (ReturnCode.isSuccess(returnCode)) {
             final size = await _fileSize(output);
-            if (size > 0 && size < origSize) {
-              onProgress?.call(1.0, 'Finished native FFmpeg compression!');
+            if (size > 0) {
+              onProgress?.call(1.0, 'Finished aggressive native FFmpeg compression!');
               try { await tempInputFile.delete(); } catch (_) {}
               return CompressionResult(
                 outputBytes: size,
