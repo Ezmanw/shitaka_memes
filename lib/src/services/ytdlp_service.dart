@@ -21,7 +21,6 @@ class YtdlpService {
   static String? _ytdlpPath;
 
   static Future<String> ytdlpPath() async {
-    if (Platform.isAndroid) return 'yt-dlp';
     if (_ytdlpPath != null) return _ytdlpPath!;
     final found = await FfmpegService.findExecutable('yt-dlp');
     if (found == null) {
@@ -114,7 +113,7 @@ class YtdlpService {
   }) async {
     final tempDir = await getTemporaryDirectory();
 
-    if (Platform.isAndroid || (await FfmpegService.findExecutable('yt-dlp')) == null) {
+    if ((await FfmpegService.findExecutable('yt-dlp')) == null) {
       return downloadNativeStream(url, tempDir, onProgress: onProgress);
     }
 
@@ -182,7 +181,7 @@ class YtdlpService {
     Directory targetDir, {
     void Function(String line)? onProgress,
   }) async {
-    if (Platform.isAndroid || (await FfmpegService.findExecutable('yt-dlp')) == null) {
+    if ((await FfmpegService.findExecutable('yt-dlp')) == null) {
       return downloadNativeStream(url, targetDir, onProgress: onProgress);
     }
 

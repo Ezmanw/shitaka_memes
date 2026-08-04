@@ -2,12 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:image/image.dart' as img;
-import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
 import 'package:path_provider/path_provider.dart';
-import 'package:video_compress/video_compress.dart' as vc;
 
 import 'settings_service.dart';
 
@@ -149,7 +145,6 @@ class FfmpegService {
   }
 
   static Future<String> ffmpegPath() async {
-    if (Platform.isAndroid) return 'ffmpeg';
     if (_ffmpegPath != null) return _ffmpegPath!;
     final found = await findExecutable('ffmpeg');
     if (found == null) {
@@ -176,7 +171,7 @@ class FfmpegService {
   }) async {
     final isGif = input.toLowerCase().endsWith('.gif') || output.toLowerCase().endsWith('.gif');
 
-    if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
+    if ((await findExecutable('ffmpeg')) == null) {
       if (isGif) {
         return compressGifDart(
           input: input,
@@ -354,171 +349,12 @@ class FfmpegService {
     required bool mute,
     ProgressCallback? onProgress,
   }) async {
-    if (Platform.isAndroid || (await findExecutable('ffmpeg')) == null) {
-      try {
-        onProgress?.call(null, 'Assaulting video frames natively...');
-
-        // 1. Copy input to app private temporary storage using Dart streams (works on all Android URIs/paths)
-        final tempDir = await getTemporaryDirectory();
-        final tempInputFile = File('${tempDir.path}/input_${DateTime.now().millisecondsSinceEpoch}.mp4');
-        final tempOutputFile = File('${tempDir.path}/out_${DateTime.now().millisecondsSinceEpoch}.mp4');
-
-        try {
-          final sink = tempInputFile.openWrite();
-          await sink.addStream(File(input).openRead());
-          await sink.close();
-        } catch (_) {
-          await File(input).copy(tempInputFile.path);
-        }
-
-        final workPath = tempInputFile.path;
-        final targetPath = tempOutputFile.path;
-
-        // 0. Primary Native Engine: FFmpegKit (Real C/C++ native FFmpeg writing to app private storage)
-        try {
-          onProgress?.call(0.1, 'Running native C/C++ FFmpeg engine...');
-          final origSize = tempInputFile.lengthSync();
-          final scaleFilter = targetBytes < 4 * 1024 * 1024 ? 'scale=360:-2' : 'scale=480:-2';
-          final targetKbits = (targetBytes * 8 / 1024).round();
-          final targetBitrateKbps = (targetKbits / 10).clamp(80, 600).round();
-
-          final command = '-y -i "$workPath" -vf $scaleFilter -c:v mpeg4 -b:v ${targetBitrateKbps}k ${mute ? "-an" : "-c:a aac -b:a 64k"} "$targetPath"';
-
-          var session = await FFmpegKit.execute(command);
-          var returnCode = await session.getReturnCode();
-
-          if (ReturnCode.isSuccess(returnCode) && tempOutputFile.existsSync()) {
-            final size = tempOutputFile.lengthSync();
-            if (size > 0 && size < origSize) {
-              final outFile = File(output);
-              await outFile.parent.create(recursive: true);
-              await tempOutputFile.copy(output);
-              final finalSize = await _fileSize(output);
-
-              onProgress?.call(1.0, 'Finished native FFmpeg compression!');
-              try { await tempInputFile.delete(); } catch (_) {}
-              try { await tempOutputFile.delete(); } catch (_) {}
-              return CompressionResult(
-                outputBytes: finalSize,
-                outputPath: output,
-              );
-            }
-          }
-
-          // Aggressive Pass 2: Force 240p mpeg4 downscale at 100k bitrate
-          onProgress?.call(0.5, 'Running aggressive low-bitrate mpeg4 pass...');
-          final aggressiveCmd = '-y -i "$workPath" -vf scale=240:-2 -c:v mpeg4 -b:v 100k ${mute ? "-an" : "-c:a aac -b:a 48k"} "$targetPath"';
-          session = await FFmpegKit.execute(aggressiveCmd);
-          returnCode = await session.getReturnCode();
-
-          if (ReturnCode.isSuccess(returnCode) && tempOutputFile.existsSync()) {
-            final size = tempOutputFile.lengthSync();
-            if (size > 0) {
-              final outFile = File(output);
-              await outFile.parent.create(recursive: true);
-              await tempOutputFile.copy(output);
-              final finalSize = await _fileSize(output);
-
-              onProgress?.call(1.0, 'Finished aggressive native FFmpeg compression!');
-              try { await tempInputFile.delete(); } catch (_) {}
-              try { await tempOutputFile.delete(); } catch (_) {}
-              return CompressionResult(
-                outputBytes: finalSize,
-                outputPath: output,
-              );
-            }
-          }
-        } catch (e) {
-          onProgress?.call(null, 'FFmpegKit notice: $e');
-        }
-
-        // 1. Secondary Android Engine: VideoCompress (Forces resolution downscaling to 480p/360p)
-        try {
-          final origSize = File(workPath).lengthSync();
-          var info = await vc.VideoCompress.compressVideo(
-            workPath,
-            quality: vc.VideoQuality.LowQuality,
-            deleteOrigin: false,
-            includeAudio: !mute,
-          );
-
-          if (info != null && info.file != null && info.file!.existsSync()) {
-            final compSize = info.file!.lengthSync();
-            if (compSize > 0 && compSize < origSize) {
-              final outFile = File(output);
-              await outFile.parent.create(recursive: true);
-              await info.file!.copy(output);
-              final size = await _fileSize(output);
-
-              try { await tempInputFile.delete(); } catch (_) {}
-              onProgress?.call(1.0, 'Finished native video compression!');
-              return CompressionResult(
-                outputBytes: size,
-                outputPath: output,
-              );
-            }
-          }
-        } catch (e) {
-          onProgress?.call(null, 'VideoCompress engine notice: $e');
-        }
-
-        // 2. Tertiary Android Engine: LightCompressor
-        try {
-          final response = await lc.LightCompressor().compressVideo(
-            path: workPath,
-            videoQuality: lc.VideoQuality.very_low,
-            android: lc.AndroidConfig(isSharedStorage: false),
-            ios: lc.IOSConfig(saveInGallery: false),
-            video: lc.Video(
-              videoName: 'SHIT_${DateTime.now().millisecondsSinceEpoch}.mp4',
-            ),
-            isMinBitrateCheckEnabled: false,
-            disableAudio: mute,
-          );
-
-          if (response is lc.OnSuccess) {
-            final dest = response.destinationPath;
-            if (dest.isNotEmpty && File(dest).existsSync()) {
-              final compressedFile = File(dest);
-              final compSize = compressedFile.lengthSync();
-              final origSize = File(workPath).lengthSync();
-
-              if (compSize > 0 && compSize < origSize) {
-                final outFile = File(output);
-                await outFile.parent.create(recursive: true);
-                await compressedFile.copy(output);
-                final size = await _fileSize(output);
-
-                try { await tempInputFile.delete(); } catch (_) {}
-                onProgress?.call(1.0, 'Finished native video compression!');
-                return CompressionResult(
-                  outputBytes: size,
-                  outputPath: output,
-                );
-              }
-            }
-          }
-        } catch (e) {
-          onProgress?.call(null, 'LightCompressor engine notice: $e');
-        }
-      } catch (e) {
-        onProgress?.call(null, 'Error during native compression: $e');
-      }
-
-      // Safe fallback: copy input file to output so it is NEVER 0 bytes, but inform user
-      try {
-        final outFile = File(output);
-        await outFile.parent.create(recursive: true);
-        await File(input).copy(output);
-        final fallbackSize = await _fileSize(output);
-        onProgress?.call(1.0, 'Original video already compressed');
-        return CompressionResult(outputBytes: fallbackSize, outputPath: output);
-      } catch (_) {
-        return CompressionResult(outputBytes: 0);
-      }
-    }
     final ffmpeg = await ffmpegPath();
     final ffprobe = await ffprobePath();
+
+    if (ffmpeg == null) {
+      throw FfmpegNotFoundException('FFmpeg executable not found. Please configure FFmpeg in Settings to compress videos.');
+    }
 
     final target = targetBytes;
     int scale = 640;
@@ -625,7 +461,7 @@ class FfmpegService {
     } on ProcessException catch (_) {
       throw FfmpegNotFoundException(
         'FFmpeg executable process is not available on this device.\n\n'
-        'On Android, please use yt-dlp "Save Direct (No Compression)" or run Shitaka Memes on Desktop.',
+        'Please ensure FFmpeg is configured or installed in system PATH.',
       );
     }
     final stderr = process.stderr.transform(

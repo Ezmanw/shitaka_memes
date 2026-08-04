@@ -39,11 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkFfmpeg() async {
-    if (Platform.isAndroid) {
-      if (mounted) setState(() => _ffmpegError = null);
-      _checkedFfmpeg = true;
-      return;
-    }
 
     try {
       await FfmpegService.ffmpegPath();

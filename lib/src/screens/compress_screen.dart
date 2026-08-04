@@ -155,12 +155,7 @@ class _CompressScreenState extends State<CompressScreen> {
 
   Future<void> _openOutputFolder() async {
     final dir = await FfmpegService.outputDirectory();
-    if (!mounted) return;
-    if (Platform.isAndroid || (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux)) {
-      await _showOutputFolderModal(context, dir);
-    } else {
-      await FfmpegService.openPath(dir.path);
-    }
+    await FfmpegService.openPath(dir.path);
   }
 
   void _showImagePreviewDialog(BuildContext context, String filePath, String fileName) {
