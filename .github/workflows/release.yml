@@ -91,9 +91,17 @@ jobs:
 
             printf '[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;Multimedia;\n' > $APPDIR/shitaka-memes.desktop
 
-            wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -O appimagetool || true
-            chmod +x appimagetool || true
-            ARCH=${{ matrix.arch }} ./appimagetool --appimage-extract-and-run $APPDIR shitaka-memes-linux-${{ matrix.arch }}.AppImage || true
+            if [ "${{ matrix.arch }}" = "arm64" ]; then
+              wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-aarch64.AppImage -O appimagetool || true
+              chmod +x appimagetool || true
+              ./appimagetool --appimage-extract || true
+              ARCH=arm_aarch64 ./squashfs-root/AppRun $APPDIR shitaka-memes-linux-arm64.AppImage || true
+            else
+              wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -O appimagetool || true
+              chmod +x appimagetool || true
+              ./appimagetool --appimage-extract || true
+              ARCH=x86_64 ./squashfs-root/AppRun $APPDIR shitaka-memes-linux-x64.AppImage || true
+            fi
           fi
 
       - name: Build .deb Debian Package
