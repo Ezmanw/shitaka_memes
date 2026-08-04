@@ -105,25 +105,10 @@ jobs:
             cp -r $BUNDLE_DIR/* $APPDIR/usr/lib/shitaka_memes/ || true
             ln -sf /usr/lib/shitaka_memes/shitaka_memes $APPDIR/usr/bin/shitaka_memes || true
 
-            cat <<'EOF' > $APPDIR/AppRun
-#!/bin/bash
-HERE="$(dirname "$(readlink -f "${0}")")"
-export PATH="${HERE}/usr/bin:${PATH}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib/shitaka_memes:${LD_LIBRARY_PATH}"
-exec "${HERE}/usr/lib/shitaka_memes/shitaka_memes" "$@"
-EOF
+            printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "${0}")")"\nexport PATH="${HERE}/usr/bin:${PATH}"\nexport LD_LIBRARY_PATH="${HERE}/usr/lib/shitaka_memes:${LD_LIBRARY_PATH}"\nexec "${HERE}/usr/lib/shitaka_memes/shitaka_memes" "$@"\n' > $APPDIR/AppRun
             chmod +x $APPDIR/AppRun
 
-            cat <<'EOF' > $APPDIR/shitaka-memes.desktop
-[Desktop Entry]
-Name=Shitaka Memes
-Comment=High-speed cross-platform meme compression utility
-Exec=shitaka_memes
-Icon=shitaka-memes
-Terminal=false
-Type=Application
-Categories=Utility;Multimedia;
-EOF
+            printf '[Desktop Entry]\nName=Shitaka Memes\nComment=High-speed cross-platform meme compression utility\nExec=shitaka_memes\nIcon=shitaka-memes\nTerminal=false\nType=Application\nCategories=Utility;Multimedia;\n' > $APPDIR/shitaka-memes.desktop
 
             wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -O appimagetool || true
             chmod +x appimagetool || true
