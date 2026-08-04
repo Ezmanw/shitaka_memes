@@ -364,18 +364,32 @@ class FfmpegService {
 
         // 1. Primary Android Engine: VideoCompress (Forces resolution downscaling to 480p/360p)
         try {
-          final vcQuality = targetBytes < 4 * 1024 * 1024
+          final origSize = File(workPath).lengthSync();
+          var vcQuality = targetBytes < 4 * 1024 * 1024
               ? vc.VideoQuality.LowQuality
               : (targetBytes < 15 * 1024 * 1024
                   ? vc.VideoQuality.MediumQuality
                   : vc.VideoQuality.HighestQuality);
 
-          final info = await vc.VideoCompress.compressVideo(
+          var info = await vc.VideoCompress.compressVideo(
             workPath,
             quality: vcQuality,
             deleteOrigin: false,
             includeAudio: !mute,
           );
+
+          // Force LowQuality pass if size wasn't reduced
+          if (info != null && info.file != null && info.file!.existsSync()) {
+            if (info.file!.lengthSync() >= origSize && vcQuality != vc.VideoQuality.LowQuality) {
+              onProgress?.call(null, 'Targeting lower bitrate pass...');
+              info = await vc.VideoCompress.compressVideo(
+                workPath,
+                quality: vc.VideoQuality.LowQuality,
+                deleteOrigin: false,
+                includeAudio: !mute,
+              );
+            }
+          }
 
           if (info != null && info.file != null && info.file!.existsSync()) {
             final compSize = info.file!.lengthSync();
@@ -406,19 +420,19 @@ class FfmpegService {
               );
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          onProgress?.call(null, 'VideoCompress engine notice: $e');
+        }
 
         // 2. Secondary Android Engine: LightCompressor
         try {
-          final lightCompressor = lc.LightCompressor();
-
           final quality = targetBytes < 3 * 1024 * 1024
               ? lc.VideoQuality.very_low
               : (targetBytes < 12 * 1024 * 1024
                   ? lc.VideoQuality.low
                   : lc.VideoQuality.medium);
 
-          final response = await lightCompressor.compressVideo(
+          final response = await lc.LightCompressor().compressVideo(
             path: workPath,
             videoQuality: quality,
             android: lc.AndroidConfig(isSharedStorage: false),
@@ -464,7 +478,9 @@ class FfmpegService {
               }
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          onProgress?.call(null, 'LightCompressor engine notice: $e');
+        }
       } catch (e) {
         onProgress?.call(null, 'Error during native compression: $e');
       }
