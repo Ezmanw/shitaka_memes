@@ -369,9 +369,10 @@ class FfmpegService {
           onProgress?.call(0.1, 'Running native C/C++ FFmpeg engine...');
           final origSize = tempInputFile.lengthSync();
           final scaleFilter = targetBytes < 4 * 1024 * 1024 ? 'scale=360:-2' : 'scale=480:-2';
-          final crfVal = targetBytes < 2 * 1024 * 1024 ? 38 : 32;
+          final targetKbits = (targetBytes * 8 / 1024).round();
+          final targetBitrateKbps = (targetKbits / 10).clamp(100, 800).round();
 
-          final command = '-y -i "$workPath" -vf $scaleFilter -c:v libx264 -crf $crfVal -preset ultrafast ${mute ? "-an" : "-c:a aac -b:a 64k"} "$output"';
+          final command = '-y -i "$workPath" -vf $scaleFilter -c:v mpeg4 -b:v ${targetBitrateKbps}k ${mute ? "-an" : "-c:a aac -b:a 64k"} "$output"';
 
           var session = await FFmpegKit.execute(command);
           var returnCode = await session.getReturnCode();
@@ -388,15 +389,15 @@ class FfmpegService {
             }
           }
 
-          // Aggressive Pass 2: Force 240p downscale if Pass 1 wasn't small enough
-          onProgress?.call(0.5, 'Running aggressive low-bitrate pass...');
-          final aggressiveCmd = '-y -i "$workPath" -vf scale=240:-2 -c:v libx264 -crf 42 -preset ultrafast ${mute ? "-an" : "-c:a aac -b:a 48k"} "$output"';
+          // Aggressive Pass 2: Force 240p mpeg4 downscale at 120k bitrate
+          onProgress?.call(0.5, 'Running aggressive low-bitrate mpeg4 pass...');
+          final aggressiveCmd = '-y -i "$workPath" -vf scale=240:-2 -c:v mpeg4 -b:v 120k ${mute ? "-an" : "-c:a aac -b:a 48k"} "$output"';
           session = await FFmpegKit.execute(aggressiveCmd);
           returnCode = await session.getReturnCode();
 
           if (ReturnCode.isSuccess(returnCode)) {
             final size = await _fileSize(output);
-            if (size > 0) {
+            if (size > 0 && size < origSize) {
               onProgress?.call(1.0, 'Finished aggressive native FFmpeg compression!');
               try { await tempInputFile.delete(); } catch (_) {}
               return CompressionResult(
@@ -412,57 +413,25 @@ class FfmpegService {
         // 1. Secondary Android Engine: VideoCompress (Forces resolution downscaling to 480p/360p)
         try {
           final origSize = File(workPath).lengthSync();
-          var vcQuality = targetBytes < 4 * 1024 * 1024
-              ? vc.VideoQuality.LowQuality
-              : (targetBytes < 15 * 1024 * 1024
-                  ? vc.VideoQuality.MediumQuality
-                  : vc.VideoQuality.HighestQuality);
-
           var info = await vc.VideoCompress.compressVideo(
             workPath,
-            quality: vcQuality,
+            quality: vc.VideoQuality.LowQuality,
             deleteOrigin: false,
             includeAudio: !mute,
           );
 
-          // Force LowQuality pass if size wasn't reduced
-          if (info != null && info.file != null && info.file!.existsSync()) {
-            if (info.file!.lengthSync() >= origSize && vcQuality != vc.VideoQuality.LowQuality) {
-              onProgress?.call(null, 'Targeting lower bitrate pass...');
-              info = await vc.VideoCompress.compressVideo(
-                workPath,
-                quality: vc.VideoQuality.LowQuality,
-                deleteOrigin: false,
-                includeAudio: !mute,
-              );
-            }
-          }
-
           if (info != null && info.file != null && info.file!.existsSync()) {
             final compSize = info.file!.lengthSync();
-            if (compSize > 0) {
+            if (compSize > 0 && compSize < origSize) {
               final outFile = File(output);
               await outFile.parent.create(recursive: true);
               await info.file!.copy(output);
               final size = await _fileSize(output);
 
-              String? thumb;
-              if (thumbnailOut != null) {
-                try {
-                  final thumbFile = await vc.VideoCompress.getFileThumbnail(workPath);
-                  if (thumbFile.existsSync()) {
-                    await File(thumbnailOut).parent.create(recursive: true);
-                    await thumbFile.copy(thumbnailOut);
-                    thumb = thumbnailOut;
-                  }
-                } catch (_) {}
-              }
-
               try { await tempInputFile.delete(); } catch (_) {}
               onProgress?.call(1.0, 'Finished native video compression!');
               return CompressionResult(
                 outputBytes: size,
-                thumbnailPath: thumb,
                 outputPath: output,
               );
             }
@@ -471,17 +440,11 @@ class FfmpegService {
           onProgress?.call(null, 'VideoCompress engine notice: $e');
         }
 
-        // 2. Secondary Android Engine: LightCompressor
+        // 2. Tertiary Android Engine: LightCompressor
         try {
-          final quality = targetBytes < 3 * 1024 * 1024
-              ? lc.VideoQuality.very_low
-              : (targetBytes < 12 * 1024 * 1024
-                  ? lc.VideoQuality.low
-                  : lc.VideoQuality.medium);
-
           final response = await lc.LightCompressor().compressVideo(
             path: workPath,
-            videoQuality: quality,
+            videoQuality: lc.VideoQuality.very_low,
             android: lc.AndroidConfig(isSharedStorage: false),
             ios: lc.IOSConfig(saveInGallery: false),
             video: lc.Video(
@@ -496,30 +459,18 @@ class FfmpegService {
             if (dest.isNotEmpty && File(dest).existsSync()) {
               final compressedFile = File(dest);
               final compSize = compressedFile.lengthSync();
+              final origSize = File(workPath).lengthSync();
 
-              if (compSize > 0) {
+              if (compSize > 0 && compSize < origSize) {
                 final outFile = File(output);
                 await outFile.parent.create(recursive: true);
                 await compressedFile.copy(output);
                 final size = await _fileSize(output);
 
-                String? thumb;
-                if (thumbnailOut != null) {
-                  try {
-                    final thumbFile = await vc.VideoCompress.getFileThumbnail(workPath);
-                    if (thumbFile.existsSync()) {
-                      await File(thumbnailOut).parent.create(recursive: true);
-                      await thumbFile.copy(thumbnailOut);
-                      thumb = thumbnailOut;
-                    }
-                  } catch (_) {}
-                }
-
                 try { await tempInputFile.delete(); } catch (_) {}
                 onProgress?.call(1.0, 'Finished native video compression!');
                 return CompressionResult(
                   outputBytes: size,
-                  thumbnailPath: thumb,
                   outputPath: output,
                 );
               }
@@ -532,13 +483,13 @@ class FfmpegService {
         onProgress?.call(null, 'Error during native compression: $e');
       }
 
-      // Safe fallback: copy input file to output so it is NEVER 0 bytes
+      // Safe fallback: copy input file to output so it is NEVER 0 bytes, but inform user
       try {
         final outFile = File(output);
         await outFile.parent.create(recursive: true);
         await File(input).copy(output);
         final fallbackSize = await _fileSize(output);
-        onProgress?.call(1.0, 'Saved video file!');
+        onProgress?.call(1.0, 'Original video already compressed');
         return CompressionResult(outputBytes: fallbackSize, outputPath: output);
       } catch (_) {
         return CompressionResult(outputBytes: 0);
