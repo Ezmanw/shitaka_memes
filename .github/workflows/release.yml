@@ -95,6 +95,9 @@ jobs:
             flutter pub get
             flutter build linux --release
 
+      - name: Fix build directory permissions
+        run: sudo chown -R $USER:$USER build || true
+
       - name: Package Tarball & Include install.sh
         run: |
           BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
@@ -109,7 +112,8 @@ jobs:
           BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
             APPDIR="build/AppDir"
-            mkdir -p $APPDIR/usr/bin $APPDIR/usr/lib/shitaka_memes $APPDIR/usr/share/applications
+            sudo mkdir -p $APPDIR/usr/bin $APPDIR/usr/lib/shitaka_memes $APPDIR/usr/share/applications || true
+            sudo chown -R $USER:$USER $APPDIR || true
             cp -r $BUNDLE_DIR/* $APPDIR/usr/lib/shitaka_memes/ || true
             ln -sf /usr/lib/shitaka_memes/shitaka_memes $APPDIR/usr/bin/shitaka_memes || true
 
