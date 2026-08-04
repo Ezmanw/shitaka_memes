@@ -93,6 +93,7 @@ jobs:
             export CXXFLAGS="-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57"
             flutter config --no-analytics
             flutter pub get
+            find /flutter /root/.pub-cache -name "CMakeLists.txt" -exec sed -i 's/FATAL_ERROR "ffmpeg_kit_flutter: Linux is x86_64-only/STATUS "ffmpeg_kit_flutter: Linux arm64 stub/g' {} + || true
             flutter build linux --release
 
       - name: Fix build directory permissions

@@ -358,50 +358,72 @@ class FfmpegService {
       try {
         onProgress?.call(null, 'Assaulting video frames natively...');
 
-        // Copy input to temporary local storage file to ensure clean File access on Android
+        // 1. Copy input to app private temporary storage using Dart streams (works on all Android URIs/paths)
         final tempDir = await getTemporaryDirectory();
         final tempInputFile = File('${tempDir.path}/input_${DateTime.now().millisecondsSinceEpoch}.mp4');
-        await File(input).copy(tempInputFile.path);
-        final workPath = tempInputFile.path;
+        final tempOutputFile = File('${tempDir.path}/out_${DateTime.now().millisecondsSinceEpoch}.mp4');
 
-        // 0. Primary Native Engine: FFmpegKit (Real C/C++ native FFmpeg on Android)
+        try {
+          final sink = tempInputFile.openWrite();
+          await sink.addStream(File(input).openRead());
+          await sink.close();
+        } catch (_) {
+          await File(input).copy(tempInputFile.path);
+        }
+
+        final workPath = tempInputFile.path;
+        final targetPath = tempOutputFile.path;
+
+        // 0. Primary Native Engine: FFmpegKit (Real C/C++ native FFmpeg writing to app private storage)
         try {
           onProgress?.call(0.1, 'Running native C/C++ FFmpeg engine...');
           final origSize = tempInputFile.lengthSync();
           final scaleFilter = targetBytes < 4 * 1024 * 1024 ? 'scale=360:-2' : 'scale=480:-2';
           final targetKbits = (targetBytes * 8 / 1024).round();
-          final targetBitrateKbps = (targetKbits / 10).clamp(100, 800).round();
+          final targetBitrateKbps = (targetKbits / 10).clamp(80, 600).round();
 
-          final command = '-y -i "$workPath" -vf $scaleFilter -c:v mpeg4 -b:v ${targetBitrateKbps}k ${mute ? "-an" : "-c:a aac -b:a 64k"} "$output"';
+          final command = '-y -i "$workPath" -vf $scaleFilter -c:v mpeg4 -b:v ${targetBitrateKbps}k ${mute ? "-an" : "-c:a aac -b:a 64k"} "$targetPath"';
 
           var session = await FFmpegKit.execute(command);
           var returnCode = await session.getReturnCode();
 
-          if (ReturnCode.isSuccess(returnCode)) {
-            var size = await _fileSize(output);
+          if (ReturnCode.isSuccess(returnCode) && tempOutputFile.existsSync()) {
+            final size = tempOutputFile.lengthSync();
             if (size > 0 && size < origSize) {
+              final outFile = File(output);
+              await outFile.parent.create(recursive: true);
+              await tempOutputFile.copy(output);
+              final finalSize = await _fileSize(output);
+
               onProgress?.call(1.0, 'Finished native FFmpeg compression!');
               try { await tempInputFile.delete(); } catch (_) {}
+              try { await tempOutputFile.delete(); } catch (_) {}
               return CompressionResult(
-                outputBytes: size,
+                outputBytes: finalSize,
                 outputPath: output,
               );
             }
           }
 
-          // Aggressive Pass 2: Force 240p mpeg4 downscale at 120k bitrate
+          // Aggressive Pass 2: Force 240p mpeg4 downscale at 100k bitrate
           onProgress?.call(0.5, 'Running aggressive low-bitrate mpeg4 pass...');
-          final aggressiveCmd = '-y -i "$workPath" -vf scale=240:-2 -c:v mpeg4 -b:v 120k ${mute ? "-an" : "-c:a aac -b:a 48k"} "$output"';
+          final aggressiveCmd = '-y -i "$workPath" -vf scale=240:-2 -c:v mpeg4 -b:v 100k ${mute ? "-an" : "-c:a aac -b:a 48k"} "$targetPath"';
           session = await FFmpegKit.execute(aggressiveCmd);
           returnCode = await session.getReturnCode();
 
-          if (ReturnCode.isSuccess(returnCode)) {
-            final size = await _fileSize(output);
-            if (size > 0 && size < origSize) {
+          if (ReturnCode.isSuccess(returnCode) && tempOutputFile.existsSync()) {
+            final size = tempOutputFile.lengthSync();
+            if (size > 0) {
+              final outFile = File(output);
+              await outFile.parent.create(recursive: true);
+              await tempOutputFile.copy(output);
+              final finalSize = await _fileSize(output);
+
               onProgress?.call(1.0, 'Finished aggressive native FFmpeg compression!');
               try { await tempInputFile.delete(); } catch (_) {}
+              try { await tempOutputFile.delete(); } catch (_) {}
               return CompressionResult(
-                outputBytes: size,
+                outputBytes: finalSize,
                 outputPath: output,
               );
             }

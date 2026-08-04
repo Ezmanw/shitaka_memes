@@ -89,6 +89,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  ffmpeg_kit_flutter_android:
+    dependency: "direct main"
+    description:
+      name: ffmpeg_kit_flutter_android
+      sha256: "6fe3ece6a8c16b04f695dab9f58b39fc35e617fce8221d4183dd027e59f71c01"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.7.0"
   ffmpeg_kit_flutter_new:
     dependency: "direct main"
     description:
