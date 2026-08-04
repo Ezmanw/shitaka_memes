@@ -63,7 +63,7 @@ jobs:
       - name: Install Linux build dependencies & packaging tools
         run: |
           sudo apt-get update && sudo apt-get install -y \
-            clang cmake ninja-build libgtk-3-dev dpkg-dev rpm alien zstd fuse libfuse2 || true
+            clang cmake ninja-build libgtk-3-dev libjson-glib-dev dpkg-dev rpm alien zstd fuse libfuse2 || true
       - run: flutter pub get
       - name: Build Flutter Linux app (x64)
         if: matrix.arch == 'x64'
@@ -80,7 +80,7 @@ jobs:
           arch: aarch64
           distro: ubuntu22.04
           install: |
-            apt-get update && apt-get install -y clang cmake ninja-build libgtk-3-dev curl git unzip dpkg-dev rpm alien zstd wget fuse libfuse2
+            apt-get update && apt-get install -y clang cmake ninja-build libgtk-3-dev libjson-glib-dev curl git unzip dpkg-dev rpm alien zstd wget fuse libfuse2
             git config --global --add safe.directory '*'
             git clone -b stable https://github.com/flutter/flutter.git /flutter
             git config --global --add safe.directory /flutter
