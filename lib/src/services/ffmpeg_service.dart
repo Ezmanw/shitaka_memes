@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:image/image.dart' as img;
 import 'package:light_compressor_v2/light_compressor_v2.dart' as lc;
 import 'package:path_provider/path_provider.dart';
@@ -362,7 +364,34 @@ class FfmpegService {
         await File(input).copy(tempInputFile.path);
         final workPath = tempInputFile.path;
 
-        // 1. Primary Android Engine: VideoCompress (Forces resolution downscaling to 480p/360p)
+        // 0. Primary Native Engine: FFmpegKit (Real C/C++ native FFmpeg on Android)
+        try {
+          onProgress?.call(0.1, 'Running native C/C++ FFmpeg engine...');
+          final origSize = tempInputFile.lengthSync();
+          final targetKbits = (targetBytes * 8 / 1024).round();
+          final targetBitrateKbps = (targetKbits / 10).clamp(100, 1500).round();
+
+          final command = '-y -i "$workPath" -vf "scale=iw*min(1\\,480/iw):-2" -c:v libx264 -crf 32 -preset ultrafast -b:v ${targetBitrateKbps}k ${mute ? "-an" : "-c:a aac -b:a 64k"} "$output"';
+
+          final session = await FFmpegKit.execute(command);
+          final returnCode = await session.getReturnCode();
+
+          if (ReturnCode.isSuccess(returnCode)) {
+            final size = await _fileSize(output);
+            if (size > 0 && size < origSize) {
+              onProgress?.call(1.0, 'Finished native FFmpeg compression!');
+              try { await tempInputFile.delete(); } catch (_) {}
+              return CompressionResult(
+                outputBytes: size,
+                outputPath: output,
+              );
+            }
+          }
+        } catch (e) {
+          onProgress?.call(null, 'FFmpegKit notice: $e');
+        }
+
+        // 1. Secondary Android Engine: VideoCompress (Forces resolution downscaling to 480p/360p)
         try {
           final origSize = File(workPath).lengthSync();
           var vcQuality = targetBytes < 4 * 1024 * 1024
