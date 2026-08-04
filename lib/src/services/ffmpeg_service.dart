@@ -356,7 +356,59 @@ class FfmpegService {
       try {
         onProgress?.call(null, 'Assaulting video frames natively...');
 
-        // 1. Primary Engine: LightCompressor (Android native MediaCodec with auto-orientation)
+        // Copy input to temporary local storage file to ensure clean File access on Android
+        final tempDir = await getTemporaryDirectory();
+        final tempInputFile = File('${tempDir.path}/input_${DateTime.now().millisecondsSinceEpoch}.mp4');
+        await File(input).copy(tempInputFile.path);
+        final workPath = tempInputFile.path;
+
+        // 1. Primary Android Engine: VideoCompress (Forces resolution downscaling to 480p/360p)
+        try {
+          final vcQuality = targetBytes < 4 * 1024 * 1024
+              ? vc.VideoQuality.LowQuality
+              : (targetBytes < 15 * 1024 * 1024
+                  ? vc.VideoQuality.MediumQuality
+                  : vc.VideoQuality.HighestQuality);
+
+          final info = await vc.VideoCompress.compressVideo(
+            workPath,
+            quality: vcQuality,
+            deleteOrigin: false,
+            includeAudio: !mute,
+          );
+
+          if (info != null && info.file != null && info.file!.existsSync()) {
+            final compSize = info.file!.lengthSync();
+            if (compSize > 0) {
+              final outFile = File(output);
+              await outFile.parent.create(recursive: true);
+              await info.file!.copy(output);
+              final size = await _fileSize(output);
+
+              String? thumb;
+              if (thumbnailOut != null) {
+                try {
+                  final thumbFile = await vc.VideoCompress.getFileThumbnail(workPath);
+                  if (thumbFile.existsSync()) {
+                    await File(thumbnailOut).parent.create(recursive: true);
+                    await thumbFile.copy(thumbnailOut);
+                    thumb = thumbnailOut;
+                  }
+                } catch (_) {}
+              }
+
+              try { await tempInputFile.delete(); } catch (_) {}
+              onProgress?.call(1.0, 'Finished native video compression!');
+              return CompressionResult(
+                outputBytes: size,
+                thumbnailPath: thumb,
+                outputPath: output,
+              );
+            }
+          }
+        } catch (_) {}
+
+        // 2. Secondary Android Engine: LightCompressor
         try {
           final lightCompressor = lc.LightCompressor();
 
@@ -367,7 +419,7 @@ class FfmpegService {
                   : lc.VideoQuality.medium);
 
           final response = await lightCompressor.compressVideo(
-            path: input,
+            path: workPath,
             videoQuality: quality,
             android: lc.AndroidConfig(isSharedStorage: false),
             ios: lc.IOSConfig(saveInGallery: false),
@@ -393,7 +445,7 @@ class FfmpegService {
                 String? thumb;
                 if (thumbnailOut != null) {
                   try {
-                    final thumbFile = await vc.VideoCompress.getFileThumbnail(input);
+                    final thumbFile = await vc.VideoCompress.getFileThumbnail(workPath);
                     if (thumbFile.existsSync()) {
                       await File(thumbnailOut).parent.create(recursive: true);
                       await thumbFile.copy(thumbnailOut);
@@ -402,6 +454,7 @@ class FfmpegService {
                   } catch (_) {}
                 }
 
+                try { await tempInputFile.delete(); } catch (_) {}
                 onProgress?.call(1.0, 'Finished native video compression!');
                 return CompressionResult(
                   outputBytes: size,
@@ -412,59 +465,6 @@ class FfmpegService {
             }
           }
         } catch (_) {}
-
-        // 2. Secondary Engine: VideoCompress (Native MediaCodec 480p/540p)
-        vc.MediaInfo? info;
-        try {
-          final vcQuality = targetBytes < 5 * 1024 * 1024
-              ? vc.VideoQuality.LowQuality
-              : vc.VideoQuality.MediumQuality;
-
-          info = await vc.VideoCompress.compressVideo(
-            input,
-            quality: vcQuality,
-            deleteOrigin: false,
-            includeAudio: !mute,
-          );
-        } catch (_) {}
-
-        File? sourceFile;
-        if (info != null) {
-          if (info.file != null && info.file!.existsSync()) {
-            sourceFile = info.file;
-          } else if (info.path != null && File(info.path!).existsSync()) {
-            sourceFile = File(info.path!);
-          }
-        }
-
-        if (sourceFile != null && sourceFile.existsSync()) {
-          final compSize = sourceFile.lengthSync();
-          if (compSize > 0) {
-            final outFile = File(output);
-            await outFile.parent.create(recursive: true);
-            await sourceFile.copy(output);
-            final size = await _fileSize(output);
-
-            String? thumb;
-            if (thumbnailOut != null) {
-              try {
-                final thumbFile = await vc.VideoCompress.getFileThumbnail(input);
-                if (thumbFile.existsSync()) {
-                  await File(thumbnailOut).parent.create(recursive: true);
-                  await thumbFile.copy(thumbnailOut);
-                  thumb = thumbnailOut;
-                }
-              } catch (_) {}
-            }
-
-            onProgress?.call(1.0, 'Finished native video compression!');
-            return CompressionResult(
-              outputBytes: size,
-              thumbnailPath: thumb,
-              outputPath: output,
-            );
-          }
-        }
       } catch (e) {
         onProgress?.call(null, 'Error during native compression: $e');
       }

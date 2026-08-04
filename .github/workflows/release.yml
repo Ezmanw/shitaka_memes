@@ -65,33 +65,74 @@ jobs:
           sudo apt-get update && sudo apt-get install -y \
             clang cmake ninja-build libgtk-3-dev dpkg-dev rpm alien zstd || true
       - run: flutter pub get
-      - name: Set up QEMU for ARM64 cross-compilation
-        if: matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
+      - name: Build Flutter Linux app (x64)
+        if: matrix.arch == 'x64'
+        run: flutter build linux --release
 
-      - name: Build Flutter Linux app
-        run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu || true
+      - name: Build Flutter Linux app (arm64 native inside QEMU container)
+        if: matrix.arch == 'arm64'
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: aarch64
+          distro: ubuntu22.04
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          install: |
+            apt-get update && apt-get install -y clang cmake ninja-build libgtk-3-dev curl git unzip dpkg-dev rpm alien zstd wget
+            curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.0-stable.tar.xz
+            tar -xf flutter_linux_3.29.0-stable.tar.xz
+          run: |
+            export PATH="$PWD/flutter/bin:$PATH"
             export CFLAGS="-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57"
             export CXXFLAGS="-march=armv8-a -mcpu=cortex-a57 -mtune=cortex-a57"
-            flutter build linux --release || true
-          else
+            flutter pub get
             flutter build linux --release
-          fi
 
       - name: Package Tarball & Include install.sh
         run: |
-          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1 || echo "build/linux/x64/release/bundle")
+          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
             cp tool/install.sh $BUNDLE_DIR/install.sh || true
             chmod +x $BUNDLE_DIR/install.sh || true
             tar -C $BUNDLE_DIR -czf shitaka-memes-linux-${{ matrix.arch }}.tar.gz . || true
           fi
 
+      - name: Build AppImage Package
+        run: |
+          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
+          if [ -d "$BUNDLE_DIR" ]; then
+            APPDIR="build/AppDir"
+            mkdir -p $APPDIR/usr/bin $APPDIR/usr/lib/shitaka_memes $APPDIR/usr/share/applications
+            cp -r $BUNDLE_DIR/* $APPDIR/usr/lib/shitaka_memes/ || true
+            ln -sf /usr/lib/shitaka_memes/shitaka_memes $APPDIR/usr/bin/shitaka_memes || true
+
+            cat <<'EOF' > $APPDIR/AppRun
+#!/bin/bash
+HERE="$(dirname "$(readlink -f "${0}")")"
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib/shitaka_memes:${LD_LIBRARY_PATH}"
+exec "${HERE}/usr/lib/shitaka_memes/shitaka_memes" "$@"
+EOF
+            chmod +x $APPDIR/AppRun
+
+            cat <<'EOF' > $APPDIR/shitaka-memes.desktop
+[Desktop Entry]
+Name=Shitaka Memes
+Comment=High-speed cross-platform meme compression utility
+Exec=shitaka_memes
+Icon=shitaka-memes
+Terminal=false
+Type=Application
+Categories=Utility;Multimedia;
+EOF
+
+            wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -O appimagetool || true
+            chmod +x appimagetool || true
+            ./appimagetool --appimage-extract-and-run $APPDIR shitaka-memes-linux-${{ matrix.arch }}.AppImage || true
+          fi
+
       - name: Build .deb Debian Package
         run: |
-          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1 || echo "build/linux/x64/release/bundle")
+          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
             DEB_DIR="build/deb_pkg"
             mkdir -p $DEB_DIR/DEBIAN $DEB_DIR/usr/lib/shitaka_memes $DEB_DIR/usr/bin $DEB_DIR/usr/share/applications
@@ -114,7 +155,7 @@ jobs:
 
       - name: Build Arch Linux package (.pkg.tar.zst)
         run: |
-          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1 || echo "build/linux/x64/release/bundle")
+          BUNDLE_DIR=$(find build/linux -name bundle -type d | head -1)
           if [ -d "$BUNDLE_DIR" ]; then
             ARCH_DIR="build/arch_pkg"
             mkdir -p $ARCH_DIR/usr/bin $ARCH_DIR/usr/lib/shitaka_memes
@@ -129,6 +170,7 @@ jobs:
         with:
           files: |
             shitaka-memes-linux-${{ matrix.arch }}.tar.gz
+            shitaka-memes-linux-${{ matrix.arch }}.AppImage
             shitaka-memes-linux-${{ matrix.arch }}.deb
             shitaka-memes-linux-${{ matrix.arch }}.rpm
             shitaka-memes-linux-${{ matrix.arch }}.pkg.tar.zst
@@ -141,6 +183,7 @@ jobs:
           name: shitaka-memes-linux-${{ matrix.arch }}
           path: |
             shitaka-memes-linux-${{ matrix.arch }}.tar.gz
+            shitaka-memes-linux-${{ matrix.arch }}.AppImage
             shitaka-memes-linux-${{ matrix.arch }}.deb
             shitaka-memes-linux-${{ matrix.arch }}.rpm
             shitaka-memes-linux-${{ matrix.arch }}.pkg.tar.zst
